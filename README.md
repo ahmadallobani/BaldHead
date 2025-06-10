@@ -37,8 +37,7 @@ To make full use of `BaldHead`, the following tools are required:
 ### 📦 Step 1: Install pipx
 
 ```bash
-python3 -m pip install --user pipx
-python3 -m pipx ensurepath
+sudo pipx ensurepath
 ```
 
 Restart your shell or run:
@@ -57,7 +56,7 @@ git clone https://github.com/ahmadallobani/BaldHead.git
 
 # External tools
 sudo pipx install impacket
-sudo pipx install bloodyAD
+sudo apt install bloodyad
 sudo pipx install certipy-ad
 ```
 

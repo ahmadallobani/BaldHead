@@ -31,7 +31,7 @@ from modules import (
 )
 from modules.adcs import enum as adcs_enum, esc1, esc2, esc3, esc9, esc10, pfx2hash
 from scripts import session_io
-from startup_check import run_checks
+from scripts.startup_check import run_checks
 
 readline.set_history_length(1000)
 try:
@@ -42,7 +42,18 @@ atexit.register(readline.write_history_file, ".baldhead_history")
 
 
 class BaldHead(cmd.Cmd):
-    intro = r"""
+    prompt = 'baldhead> '
+
+    def __init__(self):
+        super().__init__()
+        self.session_mgr = SessionManager()
+        self.checks_ran = False
+
+    def startup_banner(self):
+        from rich import print
+        from scripts.startup_check import run_checks
+
+        print(r"""
 
   ____        _     _   _   _                _
  | __ )  __ _| | __| | | | | | ___  __ _  __| |
@@ -50,16 +61,12 @@ class BaldHead(cmd.Cmd):
  | |_) | (_| | | (_| | |  _  |  __/ (_| | (_| |
  |____/ \__,_|_|\__,_| |_| |_|\___|\__,_|\__,_|
 
-by FakeLaw
+[bold blue]by FakeLaw[/bold blue]
 
-Type help or ? to list commands.
-"""
-    run_checks()
-    prompt = 'baldhead> '
+Type [bold]help[/bold] or [bold]?[/bold] to list commands.
+""")
 
-    def __init__(self):
-        super().__init__()
-        self.session_mgr = SessionManager()
+        run_checks()
 
     def preloop(self):
         self._update_prompt()
@@ -71,9 +78,10 @@ Type help or ? to list commands.
     def _update_prompt(self):
         session = self.session_mgr.get_current()
         if session:
-            self.prompt = f"baldhead 💀 {green(session.username)}@{blue(session.domain)} > "
+            self.prompt = f"{red('baldhead')} 💀 {green(session.username)}@{blue(session.domain)} > "
         else:
-            self.prompt = "baldhead> "
+            self.prompt = f"{green('baldhead')}> "
+
 
     # ------------------------
     # Aliases
@@ -137,6 +145,31 @@ Type help or ? to list commands.
             print(red("[-] No session selected."))
         else:
             print(green(f"[+] Active session: {s.name} — {s.username}@{s.domain} ({s.target_ip})"))
+
+    def do_custom(self, line):
+        """
+        Execute arbitrary shell commands from within BaldHead.
+
+        Usage:
+            custom <shell_command>
+
+        Example:
+            custom ls -la /etc
+            custom whoami
+        """
+        if not line.strip():
+            print("[!] Usage: custom <shell_command>")
+            return
+
+        try:
+            result = subprocess.run(line, shell=True, capture_output=True, text=True)
+            if result.stdout:
+                print(result.stdout)
+            if result.stderr:
+                print(f"[stderr] {result.stderr}")
+        except Exception as e:
+            print(f"[!] Error executing command: {e}")
+
 
     def do_setdefaults(self, line):
         parts = line.strip().split()
@@ -456,4 +489,6 @@ Type help or ? to list commands.
 
 
 if __name__ == '__main__':
+    BaldHead().startup_banner()
     BaldHead().cmdloop()
+
