@@ -31,6 +31,7 @@ from modules import (
 )
 from modules.adcs import enum as adcs_enum, esc1, esc2, esc3, esc9, esc10, pfx2hash
 from scripts import session_io
+from startup_check import run_checks
 
 readline.set_history_length(1000)
 try:
@@ -53,6 +54,7 @@ by FakeLaw
 
 Type help or ? to list commands.
 """
+    run_checks()
     prompt = 'baldhead> '
 
     def __init__(self):
