@@ -29,7 +29,6 @@ To make full use of `BaldHead`, the following tools are required:
 | `impacket`  | `pipx install git+https://github.com/fortra/impacket` | Kerberos, SMB, DACL, etc. attacks    |
 | `bloodyAD`  | `pipx install git+https://github.com/CravateRouge/bloodyAD` | DACL abuse, privilege escalation     |
 | `certipy-ad`| `pipx install certipy-ad`                        | AD CS enumeration and ESC exploitation |
-| `baldhead`  | `pipx install git+https://github.com/YOUR-USERNAME/baldhead.git` | Main command-line interface          |
 
 ---
 
@@ -54,12 +53,12 @@ source ~/.bashrc  # or ~/.zshrc
 
 ```bash
 # Install BaldHead
-pipx install git+https://github.com/YOUR-USERNAME/baldhead.git
+git clone https://github.com/ahmadallobani/BaldHead.git
 
 # External tools
-pipx install git+https://github.com/fortra/impacket
-pipx install git+https://github.com/CravateRouge/bloodyAD
-pipx install certipy-ad
+sudo pipx install impacket
+sudo pipx install bloodyAD
+sudo pipx install certipy-ad
 ```
 
 > All tools will be globally available in your `PATH` and isolated in their own virtual environments.
@@ -92,7 +91,7 @@ baldhead/
 After installing via `pipx`, just run:
 
 ```bash
-baldhead
+sudo python3 baldhead.py
 ```
 
 Then use commands like:
@@ -109,29 +108,3 @@ Then use commands like:
 > Use `help` inside the shell to see available modules and usage patterns.
 
 ---
-
-## 🔐 Requirements
-
-- Linux/macOS (or WSL)
-- Python 3.9+
-- `pipx` installed
-- Access to an Active Directory environment for testing
-
----
-
-## ⚠️ Legal Disclaimer
-
-> This software is intended for authorized penetration testing and research purposes only. Unauthorized use against systems without permission is illegal.
-
----
-
-## 📄 License
-
-MIT License — see [LICENSE](./LICENSE)
-
----
-
-## 🤝 Contributing
-
-Pull requests are welcome. Please open an issue first to discuss what you would like to change or improve.
-
