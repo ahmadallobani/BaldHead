@@ -2,21 +2,20 @@
 
 import subprocess
 import os
-from core.colors import red, green, blue
-
-def run_command(cmd):
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
-        return result.stdout.strip(), result.stderr.strip()
-    except Exception as e:
-        return "", str(e)
+import shutil
+from core.colors import red, green, blue, yellow
+from core.helpers import run_command, save_loot
 
 def run_bloodhound(session):
     print(blue("[*] Running BloodHound-python enumeration..."))
 
     if not session.dc_hostname:
-        print(red("[-] No DC hostname found. Use 'setdchost <fqdn>' to fix."))
-        return
+        print(yellow("[!] No DC hostname configured in session."))
+        fqdn = input("[?] Enter DC hostname (e.g., dc1.corp.local): ").strip()
+        if not fqdn:
+            print(red("[-] Cannot proceed without DC FQDN."))
+            return
+        session.set_dc_hostname(fqdn)
 
     if session.hash:
         auth = f"-u {session.username} -p :{session.hash}"
@@ -31,16 +30,21 @@ def run_bloodhound(session):
         f"-c all --zip"
     )
 
+    print(blue(f"[*] Executing as {session.username}@{session.domain} on {session.dc_hostname}"))
     out, err = run_command(cmd)
+    combined = out + "\n" + err
 
+    # === Save log
+    save_loot("bloodhound_enum.log", combined)
+
+    # === Find .zip
     zip_files = [f for f in os.listdir(".") if f.endswith(".zip") and "bloodhound" in f.lower()]
     if zip_files:
         zip_name = zip_files[0]
-        print(green(f"[+] BloodHound collection completed. Output saved as: {zip_name}"))
+        loot_zip = os.path.join("loot", zip_name)
+        shutil.move(zip_name, loot_zip)
+        print(green(f"[+] BloodHound data saved to: {loot_zip}"))
+        print(yellow("[*] You can now import it into Neo4j."))
     else:
-        print(red("[-] BloodHound may have failed:"))
-        if out:
-            print(out)
-        if err:
-            print(err)
-
+        print(red("[-] No BloodHound .zip file found."))
+        print(yellow("[!] Check log for errors: loot/bloodhound_enum.log"))

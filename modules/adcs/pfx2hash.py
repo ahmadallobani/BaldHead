@@ -1,5 +1,3 @@
-# modules/adcs/pfx2hash.py
-
 import os
 import re
 from core.helpers import run_command, save_loot

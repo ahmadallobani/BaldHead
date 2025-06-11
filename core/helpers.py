@@ -30,7 +30,6 @@ def save_loot(filename, content, binary=False):
             f.write(content)
     else:
         with open(path, "a", encoding="utf-8") as f:
-            f.write(f"\n### {datetime.now().isoformat()} ###\n")
             f.write(content.strip() + "\n")
     print(f"[+] Loot saved to: {path}")
 

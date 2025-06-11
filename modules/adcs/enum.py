@@ -1,91 +1,111 @@
+import os
 import re
+import json
+import glob
+from datetime import datetime
 from core.helpers import run_command, save_loot
 from core.colors import red, green, yellow, blue
 
+def matches_client_auth(eku_list):
+    return any("Client Authentication" in e for e in eku_list)
+
 def enumerate_adcs(session, save=False, verbose=True):
-    print(blue(f"[*] Enumerating ADCS with certipy-ad for {session.username}@{session.domain}..."))
+    print(blue(f"[*] Enumerating ADCS with certipy-ad (JSON mode) for {session.username}@{session.domain}..."))
 
-    base_cmd = f"certipy-ad find -target {session.domain} -dc-ip {session.dc_ip} -stdout"
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    base_name = f"{timestamp}"
+    expected_json = f"{base_name}_Certipy.json"
 
+    cmd = f"certipy-ad find -target {session.domain} -dc-ip {session.dc_ip} -json -output {base_name}"
     if session.hash:
-        base_cmd += f" -u {session.username} -p :{session.hash}"
+        cmd += f" -u {session.username} -hashes :{session.hash}"
     elif session.password:
-        base_cmd += f" -u {session.username} -p {session.password}"
+        cmd += f" -u {session.username} -p '{session.password}'"
     else:
-        base_cmd += f" -u {session.username} -k --no-pass"
+        cmd += f" -u {session.username} -k --no-pass"
 
-    output, err = run_command(base_cmd)
-    full_output = output + "\n" + err
+    _, err = run_command(cmd)
 
-    if "Certificate Authorities" not in full_output and "Certificate Templates" not in full_output:
-        print(red("[-] No certificate authorities or templates found."))
+    possible_files = glob.glob(f"{base_name}*_Certipy.json")
+    if not possible_files:
+        print(red("[-] Certipy did not produce expected JSON output."))
         if err:
-            print(err)
+            print(yellow("[!] Certipy stderr:\n") + err)
         return
 
-    cas = []
-    esc_vulns = []
-    templates = []
+    json_file = possible_files[0]
 
-    # Parse CAs
-    ca_blocks = re.findall(r'Certificate Authorities(.*?)Certificate Templates', full_output, re.DOTALL)
-    for ca_block in ca_blocks:
-        ca_name = re.search(r'CA Name\s+: (.*)', ca_block)
-        dns_name = re.search(r'DNS Name\s+: (.*)', ca_block)
-        subj = re.search(r'Certificate Subject\s+: (.*)', ca_block)
+    try:
+        with open(json_file, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(red(f"[-] Failed to parse Certipy JSON output: {e}"))
+        return
 
-        ca_info = {
-            "name": ca_name.group(1).strip() if ca_name else "N/A",
-            "dns": dns_name.group(1).strip() if dns_name else "N/A",
-            "subject": subj.group(1).strip() if subj else "N/A"
-        }
-        cas.append(ca_info)
+    save_loot(os.path.basename(json_file), json.dumps(data, indent=2), binary=False)
 
-    # Parse global ESC vulnerabilities
-    for line in full_output.splitlines():
-        match = re.search(r'(ESC\d{1,2})\s*[:→\-]+\s*(.*)', line)
-        if match:
-            esc_vulns.append({
-                "id": match.group(1),
-                "desc": match.group(2).strip()
-            })
+    cas, esc_vulns, templates = [], [], []
 
-    # Parse templates and ESCs from Certificate Templates section
-    template_section_match = re.search(r'Certificate Templates(.*?)(Certipy v\d|\Z)', full_output, re.DOTALL)
-    if template_section_match:
-        template_section = template_section_match.group(1)
-        template_blocks = re.split(r'\n\s*\d+\n', template_section)
+    # === Parse Certificate Authorities
+    for _, ca in data.get("Certificate Authorities", {}).items():
+        cas.append({
+            "name": ca.get("CA Name"),
+            "dns": ca.get("DNS Name"),
+            "subject": ca.get("Certificate Subject")
+        })
 
-        for block in template_blocks:
-            name_match = re.search(r'Template Name\s+:\s+(.*)', block)
-            if not name_match:
-                continue
-
-            name = name_match.group(1).strip()
-            escs = re.findall(r'ESC\d{1,2}', block)
-            if escs:
-                templates.append({
-                    "name": name,
-                    "vulns": sorted(set(escs))
+        for esc_id, esc_desc in ca.get("[!] Vulnerabilities", {}).items():
+            if re.fullmatch(r'ESC\d+', esc_id):
+                esc_vulns.append({
+                    "id": esc_id,
+                    "desc": esc_desc
                 })
 
-    # Save to session (only vulnerable templates)
+    # === Parse Templates with Derived ESCs
+    for _, tpl in data.get("Certificate Templates", {}).items():
+        tpl_name = tpl.get("Template Name", "Unknown")
+        tpl_vulns = tpl.get("[!] Vulnerabilities", {})
+        escs = [k for k in tpl_vulns if re.fullmatch(r'ESC\d+', k)]
+
+        # Derive ESCs from properties
+        if tpl.get("Enrollment Agent", False):
+            escs.append("ESC3")
+
+        if tpl.get("Enrollee Supplies Subject", False):
+            escs.append("ESC1")
+
+        if tpl.get("Schema Version") == 1:
+            escs.append("ESC13")
+
+        if matches_client_auth(tpl.get("Extended Key Usage", [])):
+            if tpl.get("Enrollee Supplies Subject"):
+                escs.append("ESC1")
+            if tpl.get("[+] User Enrollable Principals"):
+                escs.append("ESC6")
+
+        escs = sorted(set([e for e in escs if re.fullmatch(r'ESC\d+', e)]))
+        if escs:
+            templates.append({
+                "name": tpl_name,
+                "vulns": escs
+            })
+
+    # === Save to session
     session.adcs_metadata = {
         "cas": cas,
         "esc_vulns": esc_vulns,
         "templates": templates
     }
 
-    # Output
+    # === Output
     if verbose:
         print(green("[+] ADCS Enumeration Output:\n"))
 
-        if cas:
-            for ca in cas:
-                print(green("[CA] ") + ca["name"])
-                print(f"     {yellow('DNS')} : {ca['dns']}")
-                print(f"     {yellow('Subject')} : {ca['subject']}")
-            print()
+        for ca in cas:
+            print(green("[CA] ") + ca["name"])
+            print(f"     {yellow('DNS')} : {ca['dns']}")
+            print(f"     {yellow('Subject')} : {ca['subject']}")
+        print()
 
         if esc_vulns:
             print(red("[!] Potential Vulnerabilities:"))
@@ -96,9 +116,5 @@ def enumerate_adcs(session, save=False, verbose=True):
         if templates:
             print("[*] Templates:")
             for t in templates:
-                escs = ", ".join(t["vulns"])
-                print(f"  [Template] {t['name']} — Vuln: {escs}")
+                print(f"  [Template] {t['name']} — Vuln: {', '.join(sorted(set(t['vulns'])))}")
             print()
-
-    if save:
-        save_loot("certipy_adcs_output.txt", full_output)
