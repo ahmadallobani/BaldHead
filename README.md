@@ -64,36 +64,20 @@ python3 baldhead.py
 
 ## 🧠 Session Management
 
-### Add a session
-
-```bash
-session add <name> <username> <password|hash> <domain> <ip>
 ```
+session <subcommand>
 
-Example:
-```bash
-session add dc-admin Administrator 'Password123!' corp.local 192.168.1.10
+  add <name> <user> <pass_or_hash> [domain] [ip] [dc_ip] [--env ENV] [--tags tag1,tag2] [--notes "msg"]
+      Add a session. Example:
+        session add admin1 Administrator 'P@ssw0rd' auth.lab 10.0.0.5
+
+  use <name>            - Switch to session by name
+  list [filters]        - List all sessions. Optional: --domain, --ip, --env, --username
+  export [file]         - Save current sessions to a file
+  import [file]         - Load sessions from a file
+  clear                 - Delete all sessions
+
 ```
-
-### Use a session
-
-```bash
-session use <name>
-```
-
-### List sessions
-
-```bash
-session list
-```
-
-### Export/Import sessions
-
-```bash
-session export [filename.json]
-session import [filename.json]
-```
-
 ---
 
 ## 🔐 Active Directory Certificate Services (ADCS)
@@ -103,7 +87,7 @@ BaldHead supports full AD CS enumeration and exploitation automation using Certi
 ### Enumeration
 
 ```bash
-enum certs
+adcs enum
 ```
 
 This will run `certipy find` and automatically parse:
@@ -112,14 +96,15 @@ This will run `certipy find` and automatically parse:
 - ESC1–ESC16 vulnerabilities
 - Enrollment permissions and authentication flags
 
-### Exploitation Modules
+### AD CS Exploitation Modules
 
 ```bash
-attack esc1
-attack esc5
-attack esc8
-attack esc10
-attack esc16
+adcs esc1
+adcs esc5
+adcs esc8
+adcs esc6
+adcs esc2
+adcs pfx2hash
 ```
 
 Each `escX` module automates the exploit logic for that misconfiguration. If manual intervention is needed (e.g., for approval in ESC5), the tool will instruct you how to proceed.
@@ -131,23 +116,54 @@ Each `escX` module automates the exploit logic for that misconfiguration. If man
 ### Enumeration
 
 ```bash
-enum users
-enum shares
-enum smb
-enum domain
-enum certs
+enum <module> [save]
+
+Authenticated:
+  users           - LDAP user listing
+  groups          - Group listing
+  computers       - Computers in domain
+  dcs             - Domain Controllers
+  sid             - Get domain SID
+  active          - Active user accounts
+  delegation      - Accounts with delegation rights
+  trusted         - Trusted-for-delegation accounts
+  passnotreq      - Users with PASSWD_NOTREQD
+  admincount      - Accounts with adminCount=1
+  gmsa            - Group Managed Service Accounts
+  asrep           - Roastable AS-REP accounts
+  kerberoast      - Roastable SPN users
+  bloodhound      - LDAP collection for BloodHound
+
+Anonymous:
+  anon <target>   - enum4linux-ng + ftp/smb/nmap
+
+
 ```
 
 ### Attacks
 
 ```bash
-attack genericall
-attack writeowner
-attack writedacl
-attack writespn
-attack readgmsa
-attack dcsync
-attack localdump
+attack <module> [args]
+
+Modules:
+  dcsync                              - secretsdump against domain controller
+  shadow <user>                       - extract NT hash via certificate shadow
+  writedacl                           - write FullControl DACL on object
+  genericall                          - abuse GenericAll to escalate
+  writeowner                          - change object owner
+  addself                             - add yourself to group
+  addmember                           - add user to group
+  forcechangepw                       - force password reset
+  enableuser <user>                   - remove ACCOUNTDISABLE flag
+  localdump                           - LSA/SAM/DPAPI via nxc
+  kerberoast                          - SPN request + hashcat format
+  asrep                               - AS-REP roastable users
+  gettgt                              - request a TGT and store .ccache
+  readgmsa <account>                  - dump gMSA password
+  forge_silver                        - generate Silver Ticket (.ccache)
+  extrasid                            - forge TGT with ExtraSID to access parent domain
+  genericwrite                        - write FullControl DACL on object
+  bloodhound                          - run bloodhound-python with auth
 ```
 
 ### Kerberos Handling
@@ -164,8 +180,13 @@ usekerb                 #soon --no-pass for Kerberos
 Launch an interactive shell via WinRM or PsExec:
 
 ```bash
-connect winrm
-connect psexec
+connect <method>
+  smb           - Interactive smbclient session to share
+  winrm         - Launch Evil-WinRM with password
+  rdp           - Launch xfreerdp with password or hash
+  psexec        - Remote shell via impacket-psexec
+  ftp           - Try anonymous or credentialed FTP login
+
 ```
 
 Supports fallback chaining — if WinRM fails, PsExec will be attempted (or vice versa).
