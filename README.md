@@ -1,109 +1,225 @@
+# 🧠 BaldHead v1
 
-# 🧑‍🦲 BaldHead
-
-**BaldHead** is a professional, modular, and fully interactive command-line Red Teaming tool for Active Directory attacks. Built for adversary simulation, it automates and streamlines enumeration, privilege escalation, and misconfiguration abuse using modern Python tooling.
-
----
-
-## 🎯 Features
-
-- Interactive command-line interface
-- Modular attack architecture
-- Native support for:
-  - Kerberos (TGT/TGS management)
-  - DACL abuse: `GenericAll`, `GenericWrite`, `WriteOwner`, `WriteDACL`
-  - AD CS exploitation (ESC1–ESC11 detection and attack modules)
-  - Credential dumping (LSA, SAM, DPAPI via NXC)
-  - Shell launcher: Evil-WinRM/PsExec fallback chain
-- AD-aware session memory (contextual state, ticket reuse)
-- Beautiful CLI output powered by `rich`
+**BaldHead** is an interactive, modular Active Directory (AD) attack framework designed for red teamers and penetration testers. It automates and streamlines the enumeration and exploitation of common AD misconfigurations using Python and familiar tools like `Impacket`, `nxc`,`bloodyAD` and `Certipy`.
 
 ---
 
-## 🧰 Tooling Dependencies
+## ✨ Features
 
-To make full use of `BaldHead`, the following tools are required:
-
-| Tool        | Install via pipx                                 | Purpose                              |
-|-------------|--------------------------------------------------|--------------------------------------|
-| `impacket`  | `pipx install git+https://github.com/fortra/impacket` | Kerberos, SMB, DACL, etc. attacks    |
-| `bloodyAD`  | `pipx install git+https://github.com/CravateRouge/bloodyAD` | DACL abuse, privilege escalation     |
-| `certipy-ad`| `pipx install certipy-ad`                        | AD CS enumeration and ESC exploitation |
+- 🎯 Session management system with full environment and domain/IP tracking
+- 🔐 Authenticated AD enumeration using `nxc`, `ldapsearch`, `impacket`
+- 📦 Modular attack system: `GenericAll`, `WriteOwner`, `DCSync`, `ReadGMSAPassword`, and more
+- 🧾 Session import/export via structured JSON
+- 🪪 Supports NTLM, plaintext, Kerberos (`--no-pass`, TGT, and `.ccache`)
+- 🖥️ Interactive shell interface
+- 💥 WinRM and PsExec integration with auto-fallback
+- 🔑 AD CS enumeration + ESCx abuse modules (e.g., ESC1, ESC5, ESC8, ESC10, ESC16)
+- 🧠 Memory-persisted TGT/SSO support (`addkerb`, `usekerb`)
+- 🗂 Environment-aware, taggable sessions for large infrastructure support
 
 ---
 
-## 🛠 Installation (Best Practice via `pipx`)
+## 🚀 Quick Start
 
-### 📦 Step 1: Install pipx
+### 1. Clone the repository
 
 ```bash
-sudo pipx ensurepath
-```
-
-Restart your shell or run:
-
-```bash
-source ~/.bashrc  # or ~/.zshrc
-```
-
----
-
-### 🚀 Step 2: Install Required Tools
-
-```bash
-# Install BaldHead
 git clone https://github.com/ahmadallobani/BaldHead.git
+cd BaldHead
+```
 
-# External tools
-sudo pipx install impacket
+### 2. Install dependencies (recommended via pipx)
+
+Install `pipx` if you haven't:
+```bash
+sudo apt install pipx
+```
+
+Then install the tools:
+```bash
+pipx install impacket
+pipx install certipy-ad
 sudo apt install bloodyad
-sudo pipx install certipy-ad
-```
-
-> All tools will be globally available in your `PATH` and isolated in their own virtual environments.
-
----
-
-## 📂 Project Layout
+pipx ensurepath
 
 ```
-baldhead/
-├── main.py
-├── modules/
-│   ├── adcs/
-│   ├── dacl/
-│   ├── enum/
-│   └── shell/
-├── core/
-│   ├── session.py
-│   ├── protocol.py
-│   └── utils.py
-├── data/
-├── requirements.txt
-└── README.md
+
+For legacy tools:
+```bash
+sudo apt install smbclient ldap-utils
 ```
 
----
+Or clone Impacket manually for bleeding-edge modules:
+```bash
+git clone https://github.com/fortra/impacket.git
+cd impacket && pipx install .
+```
 
-## 🧪 Usage
-
-After installing via `pipx`, just run:
+### 3. Launch BaldHead
 
 ```bash
-sudo python3 baldhead.py
+python3 main.py
 ```
 
-Then use commands like:
+---
 
-- `gettgt`
-- `dcsync`
-- `dump`
-- `shell`
-- `adcs_enum`
-- `showadcs`
-- `getspn`
-- `help`
+## 🧠 Session Management
 
-> Use `help` inside the shell to see available modules and usage patterns.
+### Add a session
+
+```bash
+session add <name> <username> <password|hash> <domain> <ip>
+```
+
+Example:
+```bash
+session add dc-admin Administrator 'Password123!' corp.local 192.168.1.10
+```
+
+### Use a session
+
+```bash
+session use <name>
+```
+
+### List sessions
+
+```bash
+session list
+```
+
+### Export/Import sessions
+
+```bash
+session export [filename.json]
+session import [filename.json]
+```
 
 ---
+
+## 🔐 Active Directory Certificate Services (ADCS)
+
+BaldHead supports full AD CS enumeration and exploitation automation using Certipy.
+
+### Enumeration
+
+```bash
+enum certs
+```
+
+This will run `certipy find` and automatically parse:
+
+- CA Name / DNS / Template
+- ESC1–ESC16 vulnerabilities
+- Enrollment permissions and authentication flags
+
+### Exploitation Modules
+
+```bash
+attack esc1
+attack esc5
+attack esc8
+attack esc10
+attack esc16
+```
+
+Each `escX` module automates the exploit logic for that misconfiguration. If manual intervention is needed (e.g., for approval in ESC5), the tool will instruct you how to proceed.
+
+---
+
+## 🛠 Supported Commands
+
+### Enumeration
+
+```bash
+enum users
+enum shares
+enum smb
+enum domain
+enum certs
+```
+
+### Attacks
+
+```bash
+attack genericall
+attack writeowner
+attack writedacl
+attack writespn
+attack readgmsa
+attack dcsync
+attack localdump
+```
+
+### Kerberos Handling
+
+```bash
+addkerb <ccache file>   #soon
+usekerb                 #soon --no-pass for Kerberos
+```
+
+---
+
+## 🔥 Connect Shell
+
+Launch an interactive shell via WinRM or PsExec:
+
+```bash
+connect winrm
+connect psexec
+```
+
+Supports fallback chaining — if WinRM fails, PsExec will be attempted (or vice versa).
+
+---
+
+## 📁 Loot & Output
+
+- Looted credentials, certs, and dumps are stored in: `loot/`
+- Each module outputs summary to terminal
+- Session-aware logging planned in future versions
+
+---
+
+## 💡 Tips
+
+- Use `session notes` and `session tags` to organize large engagements
+- Combine with `kerbrute`/`GetNPUsers.py` for unauthenticated enumeration
+- Import previously cracked sessions for reuse
+
+---
+
+## 🛡️ Legal Disclaimer
+
+This tool is for **authorized security assessments** only. Do not use it against systems you do not own or have permission to test.
+
+---
+
+## 📌 Version
+
+**BaldHead v1**  
+Initial release — session management, core modules, and command interface fully operational.
+
+---
+
+## 🧩 Roadmap (v2+ Ideas)
+
+- BloodHound collection integration
+- Interactive graph navigation of AD objects
+- Custom report generation
+- Remote agent support (SOCKS, pivoting)
+
+---
+
+## 🧙 Author
+
+- Ahmad Allobani — [@ahmadallobani](https://github.com/ahmadallobani)
+
+---
+
+## 🔗 References
+
+- [Impacket](https://github.com/fortra/impacket)
+- [Certipy](https://github.com/ly4k/Certipy)
+- [nxc](https://github.com/AlboSecurity/nxc)
+- [Active Directory Attacks Cheatsheet](https://github.com/S1ckB0y1337/Active-Directory-Exploitation-Cheat-Sheet)
