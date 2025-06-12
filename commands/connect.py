@@ -1,8 +1,9 @@
 # commands/connect.py
 import os
 import shutil
+import argparse
 from core.colors import red, green, yellow, blue
-from core.helpers import run_command
+from core.helpers import run_command, select_from_list
 
 def handle_connect(args, session_mgr):
     if not args:
@@ -10,11 +11,15 @@ def handle_connect(args, session_mgr):
         return
 
     cmd = args[0].lower()
+
     session = session_mgr.get_current()
     if not session:
         print(red("[-] No active session. Use 'session use <name>' first."))
         return
 
+    run_connect(cmd, session)
+
+def run_connect(cmd, session):
     if cmd == "smb":
         connect_smb(session)
     elif cmd == "winrm":
@@ -26,23 +31,8 @@ def handle_connect(args, session_mgr):
     elif cmd == "ftp":
         connect_ftp(session)
     else:
-        print(red(f"[-] Unknown connect option: {cmd}"))
+        print(red(f"[-] Unknown connect method: {cmd}"))
         print_usage()
-
-
-def print_usage():
-    print(blue("Usage:"))
-    print("  connect smb       - Open SMB shell (impacket-smbclient)")
-    print("  connect winrm     - Launch Evil-WinRM shell")
-    print("  connect rdp       - Launch RDP client (xfreerdp)")
-    print("  connect psexec    - Run remote shell via impacket-psexec")
-    print("  connect ftp       - Try FTP login (anonymous or user)")
-
-
-import shutil
-import os
-from core.colors import red, green, yellow, blue
-from core.helpers import run_command, select_from_list
 
 def connect_smb(session):
     if not shutil.which("smbclient"):
@@ -103,23 +93,17 @@ def connect_smb(session):
     os.system(connect_cmd)
 
 
-
 def connect_winrm(session):
-    if not shutil.which("evil-winrm"):
-        print(red("[-] evil-winrm not found in PATH."))
+    cmd = f"evil-winrm -i {session.target_ip} -u {session.username}"
+    if session.password:
+        cmd += f" -p '{session.password}'"
+    elif session.hash:
+        print(red("[-] WinRM does not support NTLM hash auth in this client. Use password."))
         return
-
-    if session.hash:
-        cmd = f"evil-winrm -i {session.target_ip} -u {session.username} -H {session.hash}"
-    elif session.password:
-        cmd = f"evil-winrm -i {session.target_ip} -u {session.username} -p '{session.password}'"
     else:
-        print(red("[-] Kerberos not supported for Evil-WinRM in this version."))
+        print(red("[-] Missing password for WinRM connection."))
         return
-
-    print(blue(f"[*] Launching: {cmd}"))
     os.system(cmd)
-
 
 def connect_rdp(session):
  
@@ -134,7 +118,6 @@ def connect_rdp(session):
     print(blue(f"[*] Launching: {cmd}"))
     os.system(cmd)
 
-
 def connect_psexec(session):
     if not shutil.which("impacket-psexec"):
         print(red("[-] impacket-psexec not found in PATH."))
@@ -144,8 +127,6 @@ def connect_psexec(session):
         cmd = f"impacket-psexec {session.domain}/{session.username}@{session.target_ip} -hashes :{session.hash}"
     elif session.password:
         cmd = f"impacket-psexec {session.domain}/{session.username}:{session.password}@{session.target_ip}"
-    else:
-        cmd = f"impacket-psexec {session.domain}/{session.username}@{session.target_ip} -k --no-pass"
 
     print(blue(f"[*] Launching: {cmd}"))
     os.system(cmd)
@@ -172,3 +153,10 @@ def connect_ftp(session):
     else:
         print(yellow("[*] No password to try FTP authentication."))
 
+def print_usage():
+    print(blue("Usage:"))
+    print("  connect smb       - Open SMB shell (impacket-smbclient)")
+    print("  connect winrm     - Launch Evil-WinRM shell")
+    print("  connect rdp       - Launch RDP client (xfreerdp)")
+    print("  connect psexec    - Run remote shell via impacket-psexec")
+    print("  connect ftp       - Try FTP login (anonymous or user)")

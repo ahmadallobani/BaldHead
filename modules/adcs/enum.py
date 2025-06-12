@@ -3,7 +3,7 @@ import re
 import json
 import glob
 from datetime import datetime
-from core.helpers import run_command, save_loot
+from core.helpers import run_command, save_loot, is_esc5_candidate
 from core.colors import red, green, yellow, blue
 
 def matches_client_auth(eku_list):
@@ -21,8 +21,6 @@ def enumerate_adcs(session, save=False, verbose=True):
         cmd += f" -u {session.username} -hashes :{session.hash}"
     elif session.password:
         cmd += f" -u {session.username} -p '{session.password}'"
-    else:
-        cmd += f" -u {session.username} -k --no-pass"
 
     _, err = run_command(cmd)
 
@@ -46,7 +44,6 @@ def enumerate_adcs(session, save=False, verbose=True):
 
     cas, esc_vulns, templates = [], [], []
 
-    # === Parse Certificate Authorities
     for _, ca in data.get("Certificate Authorities", {}).items():
         cas.append({
             "name": ca.get("CA Name"),
@@ -61,46 +58,47 @@ def enumerate_adcs(session, save=False, verbose=True):
                     "desc": esc_desc
                 })
 
-    # === Parse Templates with Derived ESCs
     for _, tpl in data.get("Certificate Templates", {}).items():
         tpl_name = tpl.get("Template Name", "Unknown")
-        tpl_vulns = tpl.get("[!] Vulnerabilities", {})
-        escs = [k for k in tpl_vulns if re.fullmatch(r'ESC\d+', k)]
+        escs = [k for k in tpl.get("[!] Vulnerabilities", {}) if re.fullmatch(r'ESC\d+', k)]
 
-        # Derive ESCs from properties
         if tpl.get("Enrollment Agent", False):
             escs.append("ESC3")
-
         if tpl.get("Enrollee Supplies Subject", False):
             escs.append("ESC1")
-
         if tpl.get("Schema Version") == 1:
             escs.append("ESC13")
-
         if matches_client_auth(tpl.get("Extended Key Usage", [])):
             if tpl.get("Enrollee Supplies Subject"):
                 escs.append("ESC1")
             if tpl.get("[+] User Enrollable Principals"):
                 escs.append("ESC6")
+        if is_esc5_candidate({
+            "certificate_name_flag": tpl.get("Certificate Name Flag", ""),
+            "requires_manager_approval": tpl.get("Requires Manager Approval", False),
+            "private_key_flag": tpl.get("Private Key Flag", "")
+        }):
+            escs.append("ESC5")
 
         escs = sorted(set([e for e in escs if re.fullmatch(r'ESC\d+', e)]))
-        if escs:
-            templates.append({
-                "name": tpl_name,
-                "vulns": escs
-            })
 
-    # === Save to session
+        template_record = {
+            "name": tpl_name,
+            "vulns": escs,
+            "certificate_name_flag": tpl.get("Certificate Name Flag", ""),
+            "requires_manager_approval": tpl.get("Requires Manager Approval", False),
+            "private_key_flag": tpl.get("Private Key Flag", "")
+        }
+        templates.append(template_record)
+
     session.adcs_metadata = {
         "cas": cas,
         "esc_vulns": esc_vulns,
         "templates": templates
     }
 
-    # === Output
     if verbose:
         print(green("[+] ADCS Enumeration Output:\n"))
-
         for ca in cas:
             print(green("[CA] ") + ca["name"])
             print(f"     {yellow('DNS')} : {ca['dns']}")

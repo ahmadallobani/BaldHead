@@ -1,0 +1,38 @@
+{
+  "u2-10.129.228.236": {
+    "name": "u2-10.129.228.236",
+    "username": "blwasp",
+    "secret": "Password123!",
+    "hash": null,
+    "domain": "lab.local",
+    "target_ips": [
+      "10.129.228.236"
+    ],
+    "dc_ip": "10.129.228.236,10.129.228.235",
+    "ccache": null,
+    "kerberos": false,
+    "dc_hostname": null,
+    "notes": "",
+    "tags": [],
+    "env": "default",
+    "adcs_metadata": {}
+  },
+  "u2-10.129.228.235": {
+    "name": "u2-10.129.228.235",
+    "username": "blwasp",
+    "secret": "Password123!",
+    "hash": null,
+    "domain": "lab.local",
+    "target_ips": [
+      "10.129.228.235"
+    ],
+    "dc_ip": "10.129.228.236,10.129.228.235",
+    "ccache": null,
+    "kerberos": false,
+    "dc_hostname": null,
+    "notes": "",
+    "tags": [],
+    "env": "default",
+    "adcs_metadata": {}
+  }
+}

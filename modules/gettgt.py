@@ -1,5 +1,3 @@
-# modules/gettgt.py
-
 import os
 import glob
 import shutil
@@ -17,19 +15,12 @@ def get_tgt(session):
     os.makedirs(loot_dir, exist_ok=True)
     final_ccache = os.path.abspath(os.path.join(loot_dir, f"{session.username}.ccache"))
 
-    # === Reuse if already exists
-    if os.path.exists(final_ccache) and os.path.getsize(final_ccache) > 100:
-        print(green(f"[+] TGT already exists: {final_ccache}"))
-        os.environ["KRB5CCNAME"] = final_ccache
-        os.putenv("KRB5CCNAME", final_ccache)
-        print(green("[+] Loaded into memory (KRB5CCNAME set)"))
-        print(yellow("[*] You can verify with: tools custom klist"))
-        return
-
     # === Cleanup old .ccache files
     for f in glob.glob("*.ccache"):
-        try: os.remove(f)
-        except: pass
+        try:
+            os.remove(f)
+        except:
+            pass
 
     # === Build command
     if session.hash:
@@ -62,13 +53,15 @@ def get_tgt(session):
         print(red(f"[-] Created ccache file is too small: {tgt_file}"))
         return
 
-    # === Move and load it
+    # === Move and print info
     try:
         os.rename(tgt_file, final_ccache)
-        os.environ["KRB5CCNAME"] = final_ccache
-        os.putenv("KRB5CCNAME", final_ccache)
         print(green(f"[+] TGT saved to: {final_ccache}"))
-        print(green("[+] TGT loaded into memory ( session addkerb )"))
-        print(yellow("[*] You can now use this ticket with Kerberos-aware tools (e.g. SMB, LDAP, PSExec)"))
+        print(yellow("[*] Use the following command to load the ticket manually:"))
+        print(yellow(f"export KRB5CCNAME='{final_ccache}'"))
+        print(yellow("[*] You can now run Kerberos-aware tools like:"))
+        print(yellow(f"smbclient.py -k -no-pass //{session.dc_hostname or session.dc_ip}/C$"))
     except Exception as e:
-        print(red(f"[!] Failed to move/load ticket: {e}"))
+        print(red(f"[!] Failed to move ticket: {e}"))
+
+    save_loot("gettgt.log", combined)

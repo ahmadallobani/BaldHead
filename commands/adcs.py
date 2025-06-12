@@ -6,7 +6,7 @@ import traceback
 
 # === Import ADCS modules ===
 from modules.adcs import enum as adcs_enum
-from modules.adcs import esc1, esc2, esc3, esc9,esc4, pfx2hash,esc6
+from modules.adcs import esc1, esc2, esc3, esc9,esc4, pfx2hash,esc6,esc8,esc5
 
 def handle_adcs(args, session_mgr):
     if not args:
@@ -34,13 +34,15 @@ def handle_adcs(args, session_mgr):
         elif cmd == "esc4":
             _use_template(session, esc4.abuse_esc4, "ESC4")
 
-
         elif cmd == "esc6":
             _use_template(session, esc6.abuse_esc6, "ESC6")
+        elif cmd == "esc8":
+            esc8.abuse_esc8(session)
+        elif cmd == "esc5":
+            esc5.abuse_esc5(session)
 
         elif cmd == "esc9":
             _use_template(session, esc9.abuse_esc9, "ESC9")
-
 
         elif cmd == "pfx2hash":
             pfx2hash.abuse_pfx2hash(session)
@@ -59,13 +61,12 @@ def handle_adcs(args, session_mgr):
 
 
 def print_usage():
-    print(blue("Usage: adcs <enum|esc1|esc2|esc3|esc9|esc10|pfx2hash>"))
+    print(blue("Usage: adcs <enum|esc1|esc2|esc3|esc5|esc9|esc8|pfx2hash>"))
     print("  enum [save]      - Enumerate CAs, templates, and ESCs")
     print("  esc1             - Abuse vulnerable ESC1 template")
     print("  esc2             - Abuse vulnerable ESC2 template")
     print("  esc3             - Use enrollment agent impersonation")
     print("  esc9             - Abuse UPN mapping ESC9")
-    print("  esc10            - Abuse registry misconfig for UPN shadow")
     print("  pfx2hash         - Extract NT hash from .pfx certificate")
 
 

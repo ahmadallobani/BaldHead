@@ -9,24 +9,14 @@ from core.helpers import run_command, save_loot
 def run_bloodhound(session):
     print(blue("[*] Running BloodHound-python enumeration..."))
 
-    if not session.dc_hostname:
-        print(yellow("[!] No DC hostname configured in session."))
-        fqdn = input("[?] Enter DC hostname (e.g., dc1.corp.local): ").strip()
-        if not fqdn:
-            print(red("[-] Cannot proceed without DC FQDN."))
-            return
-        session.set_dc_hostname(fqdn)
-
     if session.hash:
         auth = f"-u {session.username} -p :{session.hash}"
     elif session.password:
         auth = f"-u {session.username} -p {session.password}"
-    else:
-        auth = f"-u {session.username} -k --no-pass"
 
     cmd = (
         f"bloodhound-python {auth} "
-        f"-d {session.domain} -dc {session.dc_hostname} -ns {session.dc_ip} "
+        f"-d {session.domain} -ns {session.dc_ip} "
         f"-c all --zip"
     )
 

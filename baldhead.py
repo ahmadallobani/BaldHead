@@ -7,7 +7,7 @@ import atexit
 from core.colors import red, green, blue
 from core.session_manager import SessionManager
 from scripts.startup_check import run_checks
-
+from core.helptext import get_help
 # === Load Command Modules ===
 from commands import setup, session, connect, attack, enum, adcs, tools, debug
 
@@ -39,6 +39,8 @@ class BaldHead(cmd.Cmd):
             self.prompt = f"{red('baldhead')} 💀 {green(s.username)}@{blue(s.domain)} > "
         else:
             self.prompt = green("baldhead> ")
+
+
 
     def startup_banner(self):
         from rich import print
@@ -76,6 +78,9 @@ class BaldHead(cmd.Cmd):
         tools.handle_tools(shlex.split(line), self.session_mgr)
     def do_debug(self, line):
         debug.handle_debug(shlex.split(line), self.session_mgr)
+    def do_help(self, line):
+        topic = line.strip() or "general"
+        print(get_help(topic))
 
 
     def do_exit(self, _):

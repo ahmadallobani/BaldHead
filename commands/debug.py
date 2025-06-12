@@ -8,7 +8,7 @@ REQUIRED_TOOLS = [
     "impacket-smbclient",
     "impacket-psexec",
     "evil-winrm",
-    "xfreerdp",
+    "xfreerdp3",
     "nxc",
     "enum4linux-ng",
     "certipy-ad"

