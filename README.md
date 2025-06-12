@@ -10,11 +10,10 @@
 - 🔐 Authenticated AD enumeration using `nxc`, `ldapsearch`, `impacket`
 - 📦 Modular attack system: `GenericAll`, `WriteOwner`, `DCSync`, `ReadGMSAPassword`, and more
 - 🧾 Session import/export via structured JSON
-- 🪪 Supports NTLM, plaintext, Kerberos (`--no-pass`, TGT, and `.ccache`)
+- 🪪 Supports NTLM, plaintext
 - 🖥️ Interactive shell interface
 - 💥 WinRM and PsExec integration with auto-fallback
 - 🔑 AD CS enumeration + ESCx abuse modules (e.g., ESC1, ESC5, ESC8, ESC10, ESC16)
-- 🧠 Memory-persisted TGT/SSO support (`addkerb`, `usekerb`)
 - 🗂 Environment-aware, taggable sessions for large infrastructure support
 
 ---
@@ -58,7 +57,7 @@ cd impacket && pipx install .
 ### 3. Launch BaldHead
 
 ```bash
-python3 main.py
+python3 baldhead.py
 ```
 
 ---
@@ -184,16 +183,10 @@ Supports fallback chaining — if WinRM fails, PsExec will be attempted (or vice
 ## 💡 Tips
 
 - Use `session notes` and `session tags` to organize large engagements
-- Combine with `kerbrute`/`GetNPUsers.py` for unauthenticated enumeration
 - Import previously cracked sessions for reuse
 
 ---
 
-## 🛡️ Legal Disclaimer
-
-This tool is for **authorized security assessments** only. Do not use it against systems you do not own or have permission to test.
-
----
 
 ## 📌 Version
 
@@ -213,7 +206,7 @@ Initial release — session management, core modules, and command interface full
 
 ## 🧙 Author
 
-- Ahmad Allobani — [@ahmadallobani](https://github.com/ahmadallobani)
+- FakeLaw — [@ahmadallobani](https://github.com/ahmadallobani) 
 
 ---
 
