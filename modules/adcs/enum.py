@@ -1,95 +1,88 @@
 import os
 import re
-import json
-import glob
 from datetime import datetime
-from core.helpers import run_command, save_loot, is_esc5_candidate
+from core.helpers import run_command, save_loot
 from core.colors import red, green, yellow, blue
 
-def matches_client_auth(eku_list):
-    return any("Client Authentication" in e for e in eku_list)
-
 def enumerate_adcs(session, save=False, verbose=True):
-    print(blue(f"[*] Enumerating ADCS with certipy-ad (JSON mode) for {session.username}@{session.domain}..."))
+    print(blue(f"[*] Enumerating ADCS with certipy-ad (stdout mode) for {session.username}@{session.domain}..."))
 
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    base_name = f"{timestamp}"
-    expected_json = f"{base_name}_Certipy.json"
-
-    cmd = f"certipy-ad find -target {session.domain} -dc-ip {session.dc_ip} -json -output {base_name}"
+    cmd = f"certipy-ad find -target {session.domain} -dc-ip {session.dc_ip} -vulnerable -stdout"
     if session.hash:
         cmd += f" -u {session.username} -hashes :{session.hash}"
     elif session.password:
         cmd += f" -u {session.username} -p '{session.password}'"
 
-    _, err = run_command(cmd)
-
-    possible_files = glob.glob(f"{base_name}*_Certipy.json")
-    if not possible_files:
-        print(red("[-] Certipy did not produce expected JSON output."))
+    out, err = run_command(cmd)
+    if not out:
+        print(red("[-] No output from Certipy."))
         if err:
-            print(yellow("[!] Certipy stderr:\n") + err)
+            print(yellow("[!] stderr:\n") + err)
         return
 
-    json_file = possible_files[0]
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    save_loot(f"{timestamp}_certipy_stdout.txt", out, binary=False)
 
-    try:
-        with open(json_file, "r") as f:
-            data = json.load(f)
-    except Exception as e:
-        print(red(f"[-] Failed to parse Certipy JSON output: {e}"))
-        return
+    # === Parse Certificate Authorities
+    cas = []
+    esc_vulns = []
+    current_ca = {}
+    inside_ca = False
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("CA Name"):
+            current_ca["name"] = line.split(":", 1)[1].strip()
+            inside_ca = True
+        elif line.startswith("DNS Name"):
+            current_ca["dns"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Certificate Subject"):
+            current_ca["subject"] = line.split(":", 1)[1].strip()
+        elif re.match(r"^ESC\d+\s*:", line) and inside_ca:
+            match = re.match(r"^(ESC\d+)", line)
+            if match:
+                esc_vulns.append({"id": match.group(1), "desc": line})
+        elif line == "" and current_ca:
+            cas.append(current_ca)
+            current_ca = {}
+            inside_ca = False
+    if "name" in current_ca:
+        cas.append(current_ca)
 
-    save_loot(os.path.basename(json_file), json.dumps(data, indent=2), binary=False)
+    # === Parse Certificate Templates
+    templates = []
+    current_tpl = {}
+    in_template = False
+    for line in out.splitlines():
+        line = line.strip()
 
-    cas, esc_vulns, templates = [], [], []
+        if line.startswith("Template Name"):
+            if current_tpl and current_tpl.get("vulns"):
+                templates.append(current_tpl)
+            current_tpl = {"name": line.split(":", 1)[1].strip(), "vulns": []}
+            in_template = True
+        elif line.startswith("[!] Vulnerabilities") and in_template:
+            continue
+        elif re.match(r"^ESC\d+\s*:", line) and in_template:
+            match = re.match(r"^(ESC\d+)", line)
+            if match:
+                current_tpl["vulns"].append(match.group(1))
+        elif line.startswith("[*] Remarks") or line == "":
+            if current_tpl and current_tpl.get("vulns"):
+                templates.append(current_tpl)
+            current_tpl = {}
+            in_template = False
 
-    for _, ca in data.get("Certificate Authorities", {}).items():
+    if current_tpl and current_tpl.get("vulns"):
+        templates.append(current_tpl)
+
+    # === Fallback for no CA
+    if not cas:
+        print(yellow("[!] No CA block found. Adding fallback..."))
         cas.append({
-            "name": ca.get("CA Name"),
-            "dns": ca.get("DNS Name"),
-            "subject": ca.get("Certificate Subject")
+            "name": "UNKNOWN-CA",
+            "dns": session.dc_ip,
+            "subject": f"CN=UNKNOWN, DC={session.domain.replace('.', ',DC=')}"
         })
-
-        for esc_id, esc_desc in ca.get("[!] Vulnerabilities", {}).items():
-            if re.fullmatch(r'ESC\d+', esc_id):
-                esc_vulns.append({
-                    "id": esc_id,
-                    "desc": esc_desc
-                })
-
-    for _, tpl in data.get("Certificate Templates", {}).items():
-        tpl_name = tpl.get("Template Name", "Unknown")
-        escs = [k for k in tpl.get("[!] Vulnerabilities", {}) if re.fullmatch(r'ESC\d+', k)]
-
-        if tpl.get("Enrollment Agent", False):
-            escs.append("ESC3")
-        if tpl.get("Enrollee Supplies Subject", False):
-            escs.append("ESC1")
-        if tpl.get("Schema Version") == 1:
-            escs.append("ESC13")
-        if matches_client_auth(tpl.get("Extended Key Usage", [])):
-            if tpl.get("Enrollee Supplies Subject"):
-                escs.append("ESC1")
-            if tpl.get("[+] User Enrollable Principals"):
-                escs.append("ESC6")
-        if is_esc5_candidate({
-            "certificate_name_flag": tpl.get("Certificate Name Flag", ""),
-            "requires_manager_approval": tpl.get("Requires Manager Approval", False),
-            "private_key_flag": tpl.get("Private Key Flag", "")
-        }):
-            escs.append("ESC5")
-
-        escs = sorted(set([e for e in escs if re.fullmatch(r'ESC\d+', e)]))
-
-        template_record = {
-            "name": tpl_name,
-            "vulns": escs,
-            "certificate_name_flag": tpl.get("Certificate Name Flag", ""),
-            "requires_manager_approval": tpl.get("Requires Manager Approval", False),
-            "private_key_flag": tpl.get("Private Key Flag", "")
-        }
-        templates.append(template_record)
 
     session.adcs_metadata = {
         "cas": cas,
@@ -99,25 +92,34 @@ def enumerate_adcs(session, save=False, verbose=True):
 
     if verbose:
         print(green("[+] ADCS Enumeration Output:\n"))
+
         for ca in cas:
-            print(green("[CA] ") + ca["name"])
-            print(f"     {yellow('DNS')} : {ca['dns']}")
-            print(f"     {yellow('Subject')} : {ca['subject']}")
+            print(green("[CA] ") + ca.get("name", "Unknown"))
+            print(f"     {yellow('DNS')} : {ca.get('dns', '')}")
+            print(f"     {yellow('Subject')} : {ca.get('subject', '')}")
         print()
 
         if esc_vulns:
-            print(red("[!] Potential Vulnerabilities:"))
-            for vuln in esc_vulns:
-                print(f"  {vuln['id']} → {vuln['desc']}")
+            print(red("[!] CA-Level Vulnerabilities:"))
+            for v in esc_vulns:
+                print(f"  {v['id']} → {v['desc']}")
             print()
+            esc_ca_template_map = {}
+            for esc in esc_vulns:
+                esc_id = esc["id"]
+                if esc_id not in esc_ca_template_map:
+                    esc_ca_template_map[esc_id] = {
+                        "name": f"CA-Level-{esc_id}",
+                        "vulns": [esc_id]
+                    }
 
+            # Add virtual templates for CA-level ESCs if not already in templates
+            for esc_tpl in esc_ca_template_map.values():
+                if esc_tpl["name"] not in [t["name"] for t in templates]:
+                    templates.append(esc_tpl)
         if templates:
             print("[*] Templates:")
-            any_vuln = False
             for t in templates:
-                if t['vulns']:
-                    any_vuln = True
-                    print(f"  [Template] {t['name']} — Vuln: {', '.join(sorted(set(t['vulns'])))}")
-            if not any_vuln:
-                print("  No vulnerable templates found.")
-            print()
+                print(f"  [Template] {t['name']} — Vuln: {', '.join(t['vulns'])}")
+        else:
+            print(yellow("[-] No vulnerable templates found."))

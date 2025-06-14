@@ -8,13 +8,13 @@ def abuse_esc2(session, template_name):
 
     cas = session.adcs_metadata.get("cas", [])
     if not cas:
-        print(red("[-] No CA data in session. Run 'adcs enum' first."))
-        return
-
-    ca_name = cas[0].get("name")
-    if not ca_name or ca_name.lower() == "n/a":
-        print(red("[-] Invalid CA name in session metadata."))
-        return
+        print(yellow("[!] No CA data found in session. Using fallback value 'UNKNOWN-CA'."))
+        ca_name = "UNKNOWN-CA"
+    else:
+        ca_name = cas[0].get("name", "").strip()
+        if not ca_name or ca_name.lower() in ["n/a", "none", ""]:
+            print(yellow("[!] CA name is missing or invalid. Using fallback value 'UNKNOWN-CA'."))
+            ca_name = "UNKNOWN-CA"
 
     output_file = f"esc2_{template_name}.pfx"
     default_upn = f"Administrator@{session.domain}"

