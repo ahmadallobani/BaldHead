@@ -38,7 +38,10 @@ def handle_enum(args, session_mgr):
         if cmd == "all":
             enum_all(args[1:], session_mgr)
         elif cmd in ENUM_MODULES:
-            ENUM_MODULES[cmd](session_mgr.get_current(), save="save" in args)
+            if cmd == "bloodhound":
+                ENUM_MODULES[cmd](session_mgr.get_current())
+            else:
+                ENUM_MODULES[cmd](session_mgr.get_current(), save="save" in args)
         elif cmd == "anon":
             anon_args = args[1:]
             anon_enum.main(anon_args)
@@ -50,6 +53,7 @@ def handle_enum(args, session_mgr):
     except Exception as e:
         print(red(f"[!] Enumeration failed: {e}"))
         print(traceback.format_exc())
+
 
 def enum_all(raw_args, session_mgr):
     parser = argparse.ArgumentParser(prog="enum all", add_help=False)
