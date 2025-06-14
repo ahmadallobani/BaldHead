@@ -199,22 +199,40 @@ def check_session(session):
 
     ip = session.target_ips[0] if session.target_ips else session.dc_ip
 
-    try:
-        for proto in ["smb", "winrm", "ldap"]:
-            print(yellow(f"[*] Trying {proto.upper()}..."))
-            cmd = f"nxc {proto} {ip} {auth_args} -d {session.domain}"
-            out, err = run_command(cmd)
-            output = out.strip() or err.strip()
-            print(output)
+    valid_protocols = []
 
-            if "STATUS_SUCCESS" in output or "successfully" in output.lower():
-                print(green(f"[+] Credentials valid via {proto.upper()}"))
-                return
+    for proto in ["smb", "winrm", "ldap"]:
+        print(yellow(f"[*] Trying {proto.upper()}..."))
+        cmd = f"nxc {proto} {ip} {auth_args} -d {session.domain}"
+        out, err = run_command(cmd)
+        output = out.strip() or err.strip()
 
-        print(red("[-] All checks failed. Credentials may be invalid."))
+        lines = output.splitlines()
+        proto_success = False
 
-    except KeyboardInterrupt:
-        print(red("\n[!] Check interrupted by user."))
+        for line in lines:
+            line = line.strip()
+            if "[+]" in line:
+                print(green(line))
+                proto_success = True
+            elif "[-]" in line:
+                print(red(line))
+            elif "[*]" in line:
+                print(blue(line))
+            elif "[!]" in line:
+                print(yellow(line))
+            else:
+                print(line)
+
+        if proto_success:
+            print(green(f"[+] Credentials valid via {proto.upper()}"))
+            valid_protocols.append(proto.upper())
+
+    if valid_protocols:
+        print(green(f"\n[+] Success: {', '.join(valid_protocols)}"))
+    else:
+        print(red("[-] All protocol checks failed. Credentials may be invalid."))
+
 
 def delete_session(session_mgr):
     sessions = session_mgr.list(raw=True)

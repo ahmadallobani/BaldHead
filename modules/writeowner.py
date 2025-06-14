@@ -3,23 +3,50 @@ from core.colors import red, green, blue, yellow
 from core.helpers import run_command, select_from_list, get_bloodyad_auth
 
 
-def attack_write_owner(session, *parts):
+def attack_write_owner(session, *parts, session_mgr=None):
     print(blue("[*] Attempting to set object owner using impacket-owneredit..."))
 
     target_object = parts[0] if len(parts) >= 1 else None
     new_owner = parts[1] if len(parts) >= 2 else None
 
-    if not target_object:
-        target_object = _prompt_object("Select target object (user/group/computer):")
+    # Ask once if the user wants to load both values from file
+    use_file = None
+    if not target_object or not new_owner:
+        choice = input("[?] Load both target object and new owner from file? (y/N): ").strip().lower()
+        use_file = choice == 'y'
 
+    # Handle target_object
+    if not target_object:
+        if use_file and os.path.exists("loot/valid_users.txt"):
+            with open("loot/valid_users.txt", "r") as f:
+                options = [line.strip() for line in f if line.strip()]
+            if options:
+                target_object = select_from_list(options, "Select target object (user/group/computer)")
+            else:
+                print(red("[-] File is empty."))
+                target_object = input("[?] Enter target object manually: ").strip()
+        else:
+            target_object = input("[?] Enter target object manually: ").strip()
+
+    # Handle new_owner
     if not new_owner:
-        new_owner = _prompt_object("Select new owner SAM (user/group):")
+        if use_file and os.path.exists("loot/valid_users.txt"):
+            with open("loot/valid_users.txt", "r") as f:
+                options = [line.strip() for line in f if line.strip()]
+            if options:
+                new_owner = select_from_list(options, "Select new owner SAM (user/group)")
+            else:
+                print(red("[-] File is empty."))
+                new_owner = input("[?] Enter new owner manually: ").strip()
+        else:
+            new_owner = input("[?] Enter new owner manually: ").strip()
 
     # === Try Impacket first
     success = _attempt_owneredit(session, target_object, new_owner, fallback=True)
     if not success:
-        # === Fallback to bloodyAD
         _attempt_bloodyad(session, target_object, new_owner)
+
+
 
 
 def _attempt_owneredit(session, target_object, new_owner, fallback=False):

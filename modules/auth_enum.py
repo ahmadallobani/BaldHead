@@ -17,20 +17,39 @@ def _exec_nxc_ldap(session, flags, outfile=None):
     cmd += f" -d {session.domain} {flags}"
 
     out, err = run_command(cmd)
-    print(out.strip() or err.strip())
+    lines = out.strip().splitlines()
+    usernames = []
 
-    if outfile and out:
-        parsed_users = []
-        lines = out.strip().splitlines()
-        for line in lines:
-            if line.startswith("LDAP") and len(line.split()) >= 5:
-                parts = line.split()
-                username = parts[4]
-                if username.lower() not in ["administrator", "guest", "krbtgt"]:
-                    parsed_users.append(username)
-        if parsed_users:
-            parsed = "\n".join(sorted(set(parsed_users))) + "\n"
-            save_loot(outfile, parsed)
+    for line in lines:
+        clean_line = line.strip()
+
+        # Print colorized output for screen only
+        if clean_line.startswith("[+]"):
+            print(green(clean_line))
+        elif clean_line.startswith("[*]"):
+            print(blue(clean_line))
+        elif clean_line.startswith("[-]"):
+            print(red(clean_line))
+        elif clean_line.startswith("[!]"):
+            print(yellow(clean_line))
+        elif clean_line.startswith("LDAP"):
+            print(green(clean_line))  # Show LDAP rows in green
+        else:
+            print(yellow(clean_line))  # Default fallback for anything else
+
+        # Parse and clean usernames from 'LDAP' lines
+        if clean_line.startswith("LDAP") and len(clean_line.split()) >= 5:
+            parts = clean_line.split()
+            username = parts[4]
+            if username.lower() not in ["-username-", "guest", "krbtgt",'-Username-',"[+]","[*]"]:
+                usernames.append(username)
+
+    # Save only clean usernames to file
+    if outfile and usernames:
+        cleaned = "\n".join(sorted(set(usernames))) + "\n"
+        save_loot(outfile, cleaned)
+
+
 
 def enum_users(session, save=False):
     print(blue("[*] Extracting domain users via LDAP..."))

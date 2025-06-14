@@ -3,23 +3,29 @@ import re
 from core.colors import red, green, yellow, blue
 from core.helpers import run_command, select_from_list, save_loot
 
-def attack_shadow(session, parts):
+def attack_shadow(session, parts, session_mgr=None):
     print(blue("[*] Starting Certipy shadow extraction..."))
 
     # === Prompt for controlled user if not passed
-    if not parts or len(parts) < 1:
+    if parts and len(parts) >= 1:
+        target = parts[0]
+    else:
         loot_file = "loot/valid_users.txt"
-        if os.path.exists(loot_file):
+        print("[?] Do you want to load usernames from file or type manually?")
+        print("  [1] Load from file")
+        print("  [2] Type manually")
+        choice = input("[>] Select option [1/2]: ").strip()
+
+        if choice == "1" and os.path.exists(loot_file):
             with open(loot_file, "r") as f:
                 users = [line.strip() for line in f if line.strip()]
             if users:
                 target = select_from_list(users, "Select user to shadow")
             else:
+                print(red("[-] File is empty. Falling back to manual input."))
                 target = input("[?] Enter target username: ").strip()
         else:
             target = input("[?] Enter target username: ").strip()
-    else:
-        target = parts[0]
 
     extract_shadow_hash(session, target)
 

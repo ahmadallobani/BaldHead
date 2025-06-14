@@ -97,8 +97,11 @@ def run_attack(args, session, session_mgr):
 
         if cmd == "addself" and len(args) >= 3:
             ATTACK_MODULES[cmd](session, args[1], args[2])
-        elif cmd == "shadow" and len(args) >= 2:
-            ATTACK_MODULES[cmd](session, [args[1]])
+        elif cmd == "shadow":
+            if len(args) >= 2:
+                ATTACK_MODULES[cmd](session, [args[1]])
+            else:
+                ATTACK_MODULES[cmd](session, [], session_mgr=session_mgr)
         elif cmd == "enableuser":
             ATTACK_MODULES[cmd](session, args[1] if len(args) > 1 else None)
         elif cmd == "readgmsa":

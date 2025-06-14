@@ -3,8 +3,7 @@ import argparse
 from core.colors import red, green, yellow, blue
 
 # Authenticated enum
-from modules import auth_enum
-
+from modules import auth_enum,bloodhound_enum
 # Anonymous enum
 from modules import anon_enum
 
@@ -24,6 +23,8 @@ ENUM_MODULES = {
     "kerberoast": auth_enum.enum_kerberoast,
     "shares": auth_enum.enum_shares,
     "deletedusers": auth_enum.enum_deleted_users,
+    "bloodhound": bloodhound_enum.run_bloodhound,
+
 }
 
 def handle_enum(args, session_mgr):
@@ -110,3 +111,5 @@ def print_usage():
     print("  shares          - SMB shares via nxc")
     print("  deletedUsers    - Enumerate Deleted Users")
     print("  anon <target>   - Anonymous enum4linux + ftp/smb/nmap")
+    print("  bloodhound      - Bloodhound graph")
+
