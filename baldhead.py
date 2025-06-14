@@ -4,10 +4,11 @@ import cmd
 import shlex
 import readline
 import atexit
+import re
 from core.colors import red, green, blue
 from core.session_manager import SessionManager
 from scripts.startup_check import run_checks
-from core.helptext import get_help
+from core.helptext import HELP_TEXT
 # === Load Command Modules ===
 from commands import setup, session, connect, attack, enum, adcs, tools, debug
 
@@ -17,6 +18,25 @@ try:
 except FileNotFoundError:
     pass
 atexit.register(readline.write_history_file, ".baldhead_history")
+
+def ansi_wrap(color_func, text):
+    """
+    Properly wrap ANSI color codes for readline to avoid prompt glitching.
+    """
+    # Get colored text like '\033[91mtext\033[0m'
+    colored = color_func(text)
+
+    # Use regex to extract start and end escape sequences
+    start_match = re.match(r'(\033\[[0-9;]+m)', colored)
+    end_match = re.search(r'(\033\[0m)$', colored)
+
+    if not start_match or not end_match:
+        return text  # fallback: no wrapping
+
+    start_code = start_match.group(1)
+    end_code = end_match.group(1)
+
+    return f"\001{start_code}\002{text}\001{end_code}\002"
 
 
 class BaldHead(cmd.Cmd):
@@ -36,9 +56,17 @@ class BaldHead(cmd.Cmd):
     def _update_prompt(self):
         s = self.session_mgr.get_current()
         if s:
-            self.prompt = f"{red('baldhead')} 💀 {green(s.username)}@{blue(s.domain)} > "
+            self.prompt = (
+                ansi_wrap(green, "baldhead") +
+                " 💀 " +
+                ansi_wrap(red, s.username) +
+                "@" +
+                ansi_wrap(blue, s.domain) +
+                " > "
+            )
         else:
-            self.prompt = green("baldhead> ")
+            self.prompt = ansi_wrap(green, "baldhead> ")
+
 
 
 
@@ -79,8 +107,12 @@ class BaldHead(cmd.Cmd):
     def do_debug(self, line):
         debug.handle_debug(shlex.split(line), self.session_mgr)
     def do_help(self, line):
-        topic = line.strip() or "general"
-        print(get_help(topic))
+            topic = line.strip().lower() or "general"
+            if topic in HELP_TEXT:
+                print(HELP_TEXT[topic])
+            else:
+                print(f"[!] Unknown help topic: {topic}\n")
+                print(HELP_TEXT["general"])
 
 
     def do_exit(self, _):
@@ -90,6 +122,17 @@ class BaldHead(cmd.Cmd):
     def do_clear(self, _):
         import os
         os.system("clear" if os.name != "nt" else "cls")
+
+    do_s = do_session
+    do_a = do_attack
+    do_c = do_connect
+    do_e = do_enum
+    do_t = do_tools
+    do_ad = do_adcs
+    do_d = do_debug
+    do_st = do_setup
+    do_set = do_setup
+    do_h = do_help
 
 
 if __name__ == "__main__":

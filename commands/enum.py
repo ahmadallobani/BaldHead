@@ -22,6 +22,8 @@ ENUM_MODULES = {
     "gmsa": auth_enum.enum_gmsa,
     "asrep": auth_enum.enum_asreproast,
     "kerberoast": auth_enum.enum_kerberoast,
+    "shares": auth_enum.enum_shares,
+    "deletedusers": auth_enum.enum_deleted_users,
 }
 
 def handle_enum(args, session_mgr):
@@ -105,4 +107,6 @@ def print_usage():
     print("  gmsa            - Enumerate GMSA accounts")
     print("  asrep           - AS-REP roastable users")
     print("  kerberoast      - Kerberoastable users")
+    print("  shares          - SMB shares via nxc")
+    print("  deletedUsers    - Enumerate Deleted Users")
     print("  anon <target>   - Anonymous enum4linux + ftp/smb/nmap")

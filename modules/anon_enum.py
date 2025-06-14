@@ -138,8 +138,20 @@ def enum(args):
             print(yellow("[!] Invalid selection. Nothing parsed."))
 
 def main(argv):
-    parser = argparse.ArgumentParser(description="Anonymous SMB Enumeration via enum4linux-ng + FTP/SMB/Nmap")
-    parser.add_argument("target", help="Target IP")
+    if not argv:
+        print(red("[-] Error: Target is required.\nUsage: e anon <target> [--save]"))
+        return
+
+    parser = argparse.ArgumentParser(description="Anonymous SMB Enumeration via enum4linux-ng + FTP/SMB/Nmap", add_help=False)
+    parser.add_argument("target", nargs="?", help="Target IP")
     parser.add_argument("--save", action='store_true', help="Save raw output to loot")
-    args = parser.parse_args(argv)
-    enum(args)
+
+    try:
+        args = parser.parse_args(argv)
+        if not args.target:
+            print(red("[-] Error: Target is required.\nUsage: e anon <target> [--save]"))
+            return
+        enum(args)
+    except SystemExit:
+        # Suppress argparse crash on invalid/missing args
+        print(red("[-] Invalid arguments. Usage: e anon <target> [--save]"))

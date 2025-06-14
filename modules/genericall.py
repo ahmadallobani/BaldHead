@@ -8,7 +8,7 @@ def attack_genericall(session, *parts):
     print(blue("[*] Attempting GenericAll abuse..."))
 
     if not parts:
-        target = input("[?] Enter target (user DN or group name): ").strip()
+        target = input("[?] Enter target (user DN or group DN): ").strip()
     else:
         target = parts[0]
 

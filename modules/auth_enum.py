@@ -44,7 +44,7 @@ def enum_shares(session, save=False):
 
     cmd = f"nxc smb {session.target_ip} -u {session.username}"
     if session.hash:
-        cmd += f" -p :{session.hash}"
+        cmd += f" -H {session.hash}"
     elif session.password:
         cmd += f" -p '{session.password}'"
     cmd += " --shares"
@@ -101,3 +101,43 @@ def enum_asreproast(session, save=False):
 def enum_kerberoast(session, save=False):
     print(blue("[*] Running Kerberoasting..."))
     _exec_nxc_ldap(session, "--kerberoasting kerberoast_hashes.txt" if save else "--kerberoasting /dev/null")
+
+def enum_shares(session, save=False):
+    print(blue("[*] Enumerating SMB shares via nxc..."))
+    if not shutil.which("nxc"):
+        print(red("[-] 'nxc' not found in PATH."))
+        return
+
+    cmd = f"nxc smb {session.target_ips[0]} -u \"{session.username}\""
+    if session.hash:
+        cmd += f" -H {session.hash}"
+    elif session.password:
+        cmd += f" -p '{session.password}'"
+    cmd += " --shares"
+
+    out, err = run_command(cmd)
+    output = out.strip() or err.strip()
+    print(output)
+
+    if save and output:
+        save_loot(f"smb_shares_{session.target_ips[0]}.txt", output)
+
+def enum_deleted_users(session, save=False):
+    print(blue("[*] Enumerating deleted user accounts via LDAP..."))
+
+    if not shutil.which("ldapsearch"):
+        print(red("[-] 'ldapsearch' not found in PATH."))
+        return
+
+    base_dn = ",".join([f"DC={x}" for x in session.domain.split(".")])
+    cmd = f"ldapsearch -H ldap://{session.dc_ip} -D \"{session.username}@{session.domain}\" -w '{session.password}' -b \"{base_dn}\" " \
+          "'(isDeleted=TRUE)' -s sub -o ldif-wrap=no -E '!1.2.840.113556.1.4.417' sAMAccountName distinguishedName description"
+
+    out, err = run_command(cmd)
+    output = out.strip() or err.strip()
+    print(output)
+
+    if save and output:
+        save_loot(f"deleted_users_{session.dc_ip}.txt", output)
+
+

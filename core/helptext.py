@@ -1,146 +1,147 @@
-# core/helptext.py — full detailed help menu for BaldHead CLI
+# core/helptext.py — full enhanced help menu for BaldHead CLI
+
+# core/helptext.py — final corrected and complete help menu for BaldHead CLI
 
 HELP_TEXT = {
     "general": """
 BaldHead - Active Directory Attack Toolkit
 
-Available command groups:
-  setup           - Set defaults and synchronize time
-  session         - Manage sessions (add, use, list, import, export)
-  connect         - Connect to targets (SMB, WinRM, RDP, PsExec, FTP)
-  attack          - Run post-exploitation modules
-  enum            - Run enumeration modules (authenticated and anonymous)
-  adcs            - Run AD Certificate Services enumeration and attacks
-  tools           - Utilities for loot, hashes, tickets, etc.
-  debug           - Debug project paths, structure, and session state
+Command Categories:
+  setup       - Configure default domain, DC IP, and sync time
+  session     - Manage authentication sessions and contexts
+  connect     - Open SMB, WinRM, RDP, FTP, or PsExec connections
+  enum        - Run enumeration modules (anonymous, authenticated, BloodHound)
+  attack      - Launch post-exploitation attack modules
+  adcs        - Abuse Active Directory Certificate Services (ESCx)
+  tools       - Utilities for parsing loot, hashes, tickets, and running modules
+  debug       - Validate tool paths, directory structure, and show session info
 
-Run 'help <command>' for more details on any group.
+Type 'help <command>' to view usage details.
 """,
 
     "setup": """
 setup <option>
 
-  domain <domain>       - Set default domain
-  ip <target_ip>        - Set default target IP / DC IP
-  dc <fqdn>             - Set FQDN of Domain Controller
-  defaults <domain> <dc_ip> - Set both domain and IP, update /etc/hosts, sync time
-  sync-time             - Sync system time with DC (required for Kerberos)
+  domain <domain>             - Set the default domain (e.g. auth.lab)
+  ip <ip_address>             - Set the default target or DC IP
+  dc <fqdn>                   - Set the FQDN of the Domain Controller
+  defaults <domain> <ip>      - Set domain + IP together and sync time
+  sync-time                   - Sync system time with Domain Controller
 """,
 
     "session": """
 session <subcommand>
 
-  add <name> <user> <pass_or_hash> [domain] [ip] [dc_ip] [--env ENV] [--tags tag1,tag2] [--notes \"msg\"]
-      Add a session. Example:
-        session add admin1 Administrator 'P@ssw0rd' auth.lab 10.0.0.5
-
-  use <name>            - Switch to session by name
-  list [filters]        - List all sessions. Optional: --domain, --ip, --env, --username
-  export [file]         - Save current sessions to a file
-  import [file]         - Load sessions from a file
-  clear                 - Delete all sessions
+  add <name> <user> <secret> [domain] [ip] [dc_ip] [--env ENV] [--tags ...]
+                                - Add a new session
+  use <name>                   - Switch to an existing session
+  list [--domain ...]          - List sessions (with optional filters)
+  export [file]                - Export sessions to a file
+  import [file] [domain] [ip]  - Import sessions from file
+  addkerb                     - Add session using current Kerberos TGT #soon
+  check <name>                - Validate session's credentials
+  delete <name>               - Delete a specific session
+  clear                       - Clear all sessions from memory
 """,
 
     "connect": """
-connect <method>
+connect <type>
 
-  smb           - Interactive smbclient session to share
-  winrm         - Launch Evil-WinRM with password
-  rdp           - Launch xfreerdp with password or hash
-  psexec        - Remote shell via impacket-psexec
-  ftp           - Try anonymous or credentialed FTP login
+  smb                         - Open an interactive SMB client shell
+  winrm                       - Connect using evil-winrm (Kerberos/hash/pass)
+  rdp                         - Launch xfreerdp connection
+  psexec                      - Execute command over SMB via PsExec
+  ftp                         - Connect to FTP service
 """,
 
-    "attack": """
-attack <module> [args]
+   "enum": """
+enum <module>
 
-Modules:
-  dcsync                              - secretsdump against domain controller
-  shadow <user>                       - extract NT hash via certificate shadow
-  writedacl                           - write FullControl DACL on object
-  genericall                          - abuse GenericAll to escalate
-  writeowner                          - change object owner
-  addself                             - add yourself to group
-  addmember                           - add user to group 
-  forcechangepw                       - force password reset
-  enableuser <user>                   - remove ACCOUNTDISABLE flag
-  localdump                           - LSA/SAM/DPAPI via nxc
-  kerberoast                          - SPN request + hashcat format
-  asrep                               - AS-REP roastable users
-  gettgt                              - request a TGT and store .ccache
-  readgmsa <account>                  - dump gMSA password
-  forge_silver                        - generate Silver Ticket (.ccache)
-  extrasid                            - forge TGT with ExtraSID to access parent domain
-  genericwrite                        - write FullControl DACL on object
-  bloodhound                          - run bloodhound-python with auth
+  Modules:
+    users           - Enumerate users via LDAP
+    groups          - Enumerate groups via LDAP
+    computers       - Enumerate computers via LDAP
+    dcs             - List Domain Controllers
+    sid             - Get domain SID
+    active          - List enabled user accounts
+    delegation      - Identify delegation settings
+    trusted         - Find 'Trusted for Delegation' users
+    passnotreq      - Users with 'Password Not Required' flag
+    admincount      - Users with adminCount=1
+    gmsa            - Enumerate GMSA accounts
+    asrep           - Find AS-REP roastable users
+    kerberoast      - Find SPN-enabled users (Kerberoast)
+    shares          - Enumerate SMB shares via nxc
+    deletedusers    - Enumerate deleted users
+    anon <target>   - Run anonymous SMB/FTP/Nmap enum
+  """,
 
-Use 'attack <module> [--env DEV] [--domain X] ...' to run across multiple sessions.
-""",
+  "attack": """
+attack <module>
 
-    "enum": """
-enum <module> [save]
-
-Authenticated:
-  users           - LDAP user listing
-  groups          - Group listing
-  computers       - Computers in domain
-  dcs             - Domain Controllers
-  sid             - Get domain SID
-  active          - Active user accounts
-  delegation      - Accounts with delegation rights
-  trusted         - Trusted-for-delegation accounts
-  passnotreq      - Users with PASSWD_NOTREQD
-  admincount      - Accounts with adminCount=1
-  gmsa            - Group Managed Service Accounts
-  asrep           - Roastable AS-REP accounts
-  kerberoast      - Roastable SPN users
-  bloodhound      - LDAP collection for BloodHound
-
-Anonymous:
-  anon <target>   - enum4linux-ng + ftp/smb/nmap
+  asrep                      - Extract AS-REP roastable users
+  kerberoast                 - Extract SPN tickets for offline cracking
+  extrasid                   - Use forged TGT with ExtraSID to escalate
+  enableuser                 - Enable a disabled user account
+  forcechangepw              - Force user to change password at next login
+  genericall                 - Abuse GenericAll to take object control
+  writedacl                  - Set FullControl DACL on a target object
+  writespn                   - Write SPN and request TGS (Kerberoast)
+  writeowner                 - Change ownership of target object
+  addself                    - Add current user to target ACL
+  dcsync                     - Perform DCSync to dump password hashes
+  shadow                     - Abuse shadow credentials (ESC10, ESC11, ESC16)
+  rbcd                       - Perform full RBCD attack chain
+  gettgt                     - Request new TGT from KDC
+  forge_silver               - Create and use forged Silver Ticket
+  dump_secrets               - Dump SAM, LSA, and DPAPI secrets
+  password_spray             - Spray password across users
+  readgmsa                   - Dump GMSA passwords from AD
 """,
 
     "adcs": """
-adcs <subcommand>
+adcs <module>
 
-  enum [save]      - Discover CAs, templates, ESCx vulns
-  esc1             - abuse ESC1 templates (supply subject)
-  esc2             - abuse ESC2 to enroll as admin
-  esc3             - use enrollment agent to request on-behalf
-  esc4             - abuse ESC4 via SAN + UPN override
-  esc6             - abuse ESC6 for impersonation
-  esc9             - abuse ESC9 (UPN change)
-  esc10            - abuse ESC10 (registry config)
-  pfx2hash         - extract NT hash from .pfx cert
-  show             - display stored ADCS metadata
+  enum                      - Enumerate CA, templates, and ADCS vulnerabilities
+  esc1                      - ESC1: Enrollable template with client auth EKU
+  esc2                      - ESC2: Misconfigured enrollment permissions
+  esc3                      - ESC3: Dangerous CT_FLAGS
+  esc4                      - ESC4: Enrollment agent abuse
+  esc5                      - ESC5: SubCA manual approval request abuse
+  esc6                      - ESC6: Misconfigured CT_FLAGS and EKU abuse
+  esc7                      - ESC7: No manager approval required for client auth
+  esc8                      - NTLM relay to ADCS HTTP endpoint
+  esc9                      - ESC9: Misconfigured certificate name constraints
+  esc10                     - ESC10: Misconfigured registry-based auth mapping
+  esc11                     - ESC11: Vulnerable template issuance chain
+  esc16                     - ESC16: Shadow credentials + cert authentication
+  showadcs                  - Show CA name, DNS, and loaded metadata
 """,
 
-    "tools": """
-tools <subcommand>
+"tools": """
+tools <option>
 
-  custom <cmd>         - Run shell command (env vars like {user}, {pass} substituted)
-  loot                 - List loot files
-  loot <file>          - Show content of a specific loot file
-  loot grep <keyword>  - Search all loot files for keyword
-  convert_ticket       - Convert Kerberos tickets (describe .ccache/.kirbi)
-  showmodules          - List supported attack modules
-  parsehashes          - Extract and classify NTLM/ASREP/TGS hashes from loot
-  checktickets         - List and show all tickets in loot (ccache, kirbi)
-  extract-creds        - Pull all user:pass and user:hash from loot
-  open <filename>      - View loot file interactively
-  grepusers <term>     - Search for user-like values in loot
-  (no args)            - Launch interactive tools menu
-""",
+  loot                      - List all stored loot files
+  showmodules               - Show available attack/enum modules
+  parsehashes               - Extract NTLM hashes from output files
+  checktickets              - Analyze .kirbi or .ccache Kerberos tickets
+  extract-creds             - Parse credentials from all loot
+  open <filename>           - Open and display a loot file
+  grepusers <filename>      - Extract usernames from logs/tickets
+  removeloot <filename>     - Delete a specific loot file
+  custom <command>          - Run any custom shell command
+  run                       - Launch tools menu in interactive mode
+"""
+,
 
     "debug": """
-debug <subcommand>
+ debug <option>
 
-  check-paths     - Ensure required tools exist in PATH
-  check-structure - Ensure folder structure is valid
-  whoami          - Print current session info
+  check_paths               - Verify that required tools are in PATH
+  check_structure           - Ensure BaldHead folders and loot paths exist
+  whoami            - Show current session info (debug)
 """
 }
-
 
 def get_help(topic="general"):
     topic = topic.lower().strip()

