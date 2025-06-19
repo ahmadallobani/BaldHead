@@ -98,6 +98,7 @@ attack kerberoast
 attack dcsync
 attack shadow
 attack rbcd
+attack mssql <action>
 ```
 
 ### Enumerate Environment:
@@ -105,6 +106,7 @@ attack rbcd
 ```bash
 enum users
 enum delegation
+enum mssql <action> [db] [table]
 enum anon 192.168.56.10
 ```
 
