@@ -3,7 +3,7 @@ import argparse
 from core.colors import red, green, yellow, blue
 
 # Authenticated enum
-from modules import auth_enum,bloodhound_enum
+from modules import auth_enum, bloodhound_enum, enum_mssql
 # Anonymous enum
 from modules import anon_enum
 
@@ -24,7 +24,7 @@ ENUM_MODULES = {
     "shares": auth_enum.enum_shares,
     "deletedusers": auth_enum.enum_deleted_users,
     "bloodhound": bloodhound_enum.run_bloodhound,
-
+    # DO NOT PUT "mssql" HERE – it's handled separately!
 }
 
 def handle_enum(args, session_mgr):
@@ -37,17 +37,33 @@ def handle_enum(args, session_mgr):
     try:
         if cmd == "all":
             enum_all(args[1:], session_mgr)
+
+        elif cmd == "anon":
+            anon_args = args[1:]
+            anon_enum.main(anon_args)
+
+        elif cmd == "mssql":
+            if len(args) < 2:
+                print(red("[-] Missing action. Use: enum mssql <action> [db] [table] [save]"))
+                return
+
+            action = args[1].lower()
+            db = args[2] if len(args) > 2 and args[2].lower() != "save" else None
+            table = args[3] if len(args) > 3 and args[3].lower() != "save" else None
+            save_flag = "save" in args
+
+            enum_mssql.enum_mssql(session_mgr.get_current(), action=action, db=db, table=table, save=save_flag)
+
         elif cmd in ENUM_MODULES:
             if cmd == "bloodhound":
                 ENUM_MODULES[cmd](session_mgr.get_current())
             else:
                 ENUM_MODULES[cmd](session_mgr.get_current(), save="save" in args)
-        elif cmd == "anon":
-            anon_args = args[1:]
-            anon_enum.main(anon_args)
+
         else:
             print(red(f"[-] Unknown enum module: {cmd}"))
             print_usage()
+
     except KeyboardInterrupt:
         print(yellow("\n[!] Enumeration interrupted by user."))
     except Exception as e:
@@ -116,4 +132,4 @@ def print_usage():
     print("  deletedUsers    - Enumerate Deleted Users")
     print("  anon <target>   - Anonymous enum4linux + ftp/smb/nmap")
     print("  bloodhound      - Bloodhound graph")
-
+    print("  mssql <action> [db] [table] [save] - MSSQL enumeration module")

@@ -52,6 +52,7 @@ connect <type>
   rdp                         - Launch xfreerdp connection
   psexec                      - Execute command over SMB via PsExec
   ftp                         - Connect to FTP service
+  mssql                       - Connect to MSSQL via impacket-mssqlclient
 """,
 
    "enum": """
@@ -74,6 +75,7 @@ enum <module>
     shares          - Enumerate SMB shares via nxc
     deletedusers    - Enumerate deleted users
     anon <target>   - Run anonymous SMB/FTP/Nmap enum
+    mssql <action>  - Enumerate MSSQL targets (auth required)
   """,
 
   "attack": """
@@ -97,6 +99,7 @@ attack <module>
   dump_secrets               - Dump SAM, LSA, and DPAPI secrets
   password_spray             - Spray password across users
   readgmsa                   - Dump GMSA passwords from AD
+  mssql <action>             - MSSQL attacks (xp_cmdshell, linked, revshell, dump_hashes)
 """,
 
     "adcs": """

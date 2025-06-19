@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 import subprocess
 import glob
+from core.colors import red, green, yellow, blue
 import json
 def get_auth_args(session):
     """Return formatted auth string for net rpc / nxc / fallback tools."""
@@ -85,3 +86,18 @@ def load_json_loot(session, template_fallback=False):
         except Exception:
             continue
     return []
+
+def print_table(headers, rows):
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, col in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(str(col)))
+
+    def format_row(row):
+        return " | ".join(str(col).ljust(col_widths[i]) for i, col in enumerate(row))
+
+    print()
+    print(green("  " + format_row(headers)))
+    print(green("  " + "-+-".join("-" * w for w in col_widths)))
+    for row in rows:
+        print("  " + format_row(row))

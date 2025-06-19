@@ -7,7 +7,7 @@ import argparse
 from modules import (
     addself, writeowner, genericall, dcsync, shadow, dump_secrets,
     writespn, forcechangepw, kerberoast, asrep, bloodhound_enum, readgmsa, gettgt,
-    enableuser, password_spray, forge_silver, extrasid, writedacl, convert_ticket,attack_rbcd,
+    enableuser, password_spray, forge_silver, extrasid, writedacl, convert_ticket, attack_rbcd, attack_mssql,
 )
 
 # === Modules that require a session ===
@@ -34,7 +34,8 @@ ATTACK_MODULES = {
     "genericwrite": writedacl.attack_writedacl,
     "kirbi2ccache": convert_ticket.convert_ticket,
     "rbcd": attack_rbcd.attack_rbcd,
-    }
+    "mssql": attack_mssql.attack_mssql,
+}
 
 # === Aliases for convenience ===
 ATTACK_ALIASES = {
@@ -108,6 +109,16 @@ def run_attack(args, session, session_mgr):
             ATTACK_MODULES[cmd](session, *args[1:])
         elif cmd == "forcechangepw":
             ATTACK_MODULES[cmd](session, *args[1:], session_mgr=session_mgr)
+        elif cmd == "mssql":
+            action = args[1] if len(args) > 1 else None
+            command = args[2] if len(args) > 2 else None
+            target = args[3] if len(args) > 3 else None
+            lhost = None
+            lport = None
+            if action in ["revshell", "linked_revshell"]:
+                lhost = input("[?] Enter LHOST for reverse shell: ").strip()
+                lport = input("[?] Enter LPORT for reverse shell: ").strip()
+            ATTACK_MODULES[cmd](session, action=action, command=command, target=target, lhost=lhost, lport=lport)
         else:
             ATTACK_MODULES[cmd](session)
 

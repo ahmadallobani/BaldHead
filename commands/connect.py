@@ -30,6 +30,8 @@ def run_connect(cmd, session):
         connect_psexec(session)
     elif cmd == "ftp":
         connect_ftp(session)
+    elif cmd == "mssql":
+        connect_mssql(session)
     else:
         print(red(f"[-] Unknown connect method: {cmd}"))
         print_usage()
@@ -153,6 +155,29 @@ def connect_ftp(session):
     else:
         print(yellow("[*] No password to try FTP authentication."))
 
+def connect_mssql(session):
+    if not shutil.which("impacket-mssqlclient"):
+        print(red("[-] impacket-mssqlclient not found in PATH."))
+        return
+
+    if not session.username:
+        print(red("[-] Missing username for MSSQL connection."))
+        return
+
+    if session.hash:
+        print(red("[-] MSSQL client does not support NTLM hashes directly. Use password."))
+        return
+
+    if not session.password:
+        print(red("[-] Missing password for MSSQL connection."))
+        return
+
+    domain_prefix = f"{session.domain}/" if session.domain else ""
+    cmd = f"impacket-mssqlclient {domain_prefix}{session.username}:{session.password}@{session.target_ip} -windows-auth"
+    print(blue(f"[*] Launching: {cmd}"))
+    os.system(cmd)
+
+
 def print_usage():
     print(blue("Usage:"))
     print("  connect smb       - Open SMB shell (impacket-smbclient)")
@@ -160,3 +185,4 @@ def print_usage():
     print("  connect rdp       - Launch RDP client (xfreerdp)")
     print("  connect psexec    - Run remote shell via impacket-psexec")
     print("  connect ftp       - Try FTP login (anonymous or user)")
+    print("  connect mssql     - Connect to MSSQL via impacket-mssqlclient")
