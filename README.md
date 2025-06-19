@@ -1,4 +1,4 @@
-# BaldHead v1.0
+# BaldHead v1.1
 
 **BaldHead** is a modular and interactive Active Directory (AD) attack framework built for red teamers and security testers. It automates enumeration and exploitation of AD misconfigurations using tools like `Impacket`, `nxc`, `Certipy`, and `BloodyAD`.
 
@@ -195,7 +195,7 @@ baldhead/
 
 ## Version
 
-**BaldHead v1.0**  
+**BaldHead v1.1**  
 Initial release — session management, core modules, and command interface fully operational.
 
 ---
