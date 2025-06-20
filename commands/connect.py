@@ -173,35 +173,36 @@ def connect_mssql(session):
         return
 
     full_user = f"{session.domain}/{session.username}" if session.domain else session.username
-    base_cmd = f"impacket-mssqlclient {full_user}:{session.password}@{session.dc_ip} -windows-auth -command"
-
-    def clean(text):
-        lines = text.strip().splitlines()
-        output = []
-        for line in lines:
-            line = line.strip()
-            if any(line.startswith(s) for s in ["[*]", "[-]", "Impacket"]) or line.lower().startswith("sql>"):
-                continue
-            if line:
-                output.append(line)
-        return output
-
-    def exec_sql():
-        os.system(base_cmd)
+    base_cmd = f"impacket-mssqlclient {full_user}:{session.password}@{session.dc_ip} -windows-auth"
 
     def fallback_sql():
         fallback_cmd = f"impacket-mssqlclient {session.username}:{session.password}@{session.dc_ip}"
-        os.system(fallback_cmd)
+        print(blue(f"[*] Launching: {fallback_cmd}"))
+        fallback_child = pexpect.spawn(fallback_cmd, timeout=None, encoding='utf-8')
+        fallback_child.interact()
 
     print(blue(f"[*] Launching: {base_cmd}"))
-    out, err = run_command(base_cmd)
+    try:
+        child = pexpect.spawn(base_cmd, timeout=15, encoding='utf-8')
+        index = child.expect([
+            "Login failed for user",
+            "user '.*?Guest'",
+            "SQL .*?master\\)>",
+            pexpect.EOF,
+            pexpect.TIMEOUT
+        ])
 
-    if "Login failed for user" in err or "Login failed" in out or "Guest" in out:
-        print(yellow("[!] Login failed or downgraded to Guest. Falling back to SQL Auth..."))
-        print(blue(f"[*] Launching: impacket-mssqlclient {session.username}:{session.password}@{session.dc_ip}"))
-        fallback_sql()
-    else:
-        os.system(base_cmd)
+        if index in [0, 1]:
+            print(yellow("[!] Login failed or downgraded to Guest. Falling back to SQL Auth..."))
+            child.close()
+            fallback_sql()
+        elif index == 2:
+            child.interact()
+        else:
+            print(red("[-] Unexpected response or timeout."))
+
+    except Exception as e:
+        print(red(f"[-] Error launching MSSQL client: {e}"))
 
 
 def print_usage():
