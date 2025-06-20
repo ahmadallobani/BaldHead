@@ -43,6 +43,28 @@ def print_mssql_enum_usage():
 def run_with_windows_auth(session, full_user, action, db, table):
     base_cmd = f"impacket-mssqlclient {full_user}:{session.password}@{session.dc_ip} -windows-auth -command"
 
+    def clean(text):
+        lines = text.strip().splitlines()
+        output = []
+        for line in lines:
+            line = line.strip()
+            if any(line.startswith(s) for s in ["[*]", "[-]", "Impacket"]) or line.lower().startswith("sql>"):
+                continue
+            if line:
+                output.append(line)
+        return output
+
+    def exec_sql(sql):
+        cmd = f"{base_cmd} \"{sql}\""
+        out, err = run_command(cmd)
+
+        if "Login failed for user" in err or "Login failed" in out:
+            print(yellow("[!] Falling back to SQL Auth (no -windows-auth)"))
+            fallback_cmd = f"impacket-mssqlclient {session.username}:{session.password}@{session.dc_ip} -command \"{sql}\""
+            out, err = run_command(fallback_cmd)
+
+        return clean(out), err
+
     if action == "linked":
         query = "EXEC sp_linkedservers"
     elif action == "spns":
@@ -65,14 +87,16 @@ def run_with_windows_auth(session, full_user, action, db, table):
             print(red(f"[-] Unsupported or incomplete action: {action}"))
             return
 
-    full_cmd = f"{base_cmd} \"{query}\""
-    out, err = run_command(full_cmd)
-    if not out:
-        print(red(f"[-] Error: {err.strip()}"))
+    cleaned_output, err = exec_sql(query)
+
+    if not cleaned_output:
+        print(red(f"[-] No data returned.\n{err.strip()}"))
         return
 
     print(green("\n[+] Enumeration Output:\n"))
-    parse_and_print_output(out, action)
+    parse_and_print_output("\n".join(cleaned_output), action)
+
+
 
 def parse_and_print_output(raw_out, action):
     lines = raw_out.strip().splitlines()
@@ -136,8 +160,6 @@ def parse_and_print_output(raw_out, action):
 
     print_table(["Result"], [[line.strip()] for line in cleaned_lines if line.strip()])
 
-
-
 def run_with_sql_auth(session, action, db, table):
     import pymssql
     try:
@@ -183,7 +205,6 @@ def run_with_sql_auth(session, action, db, table):
 
     except Exception as e:
         print(red(f"[-] Error: {e}"))
-
 
 def build_linked_query(linked, action, db=None, table=None):
     db = db or "master"
@@ -237,7 +258,6 @@ def build_linked_query(linked, action, db=None, table=None):
 
     return queries.get(action)
 
-
 def build_local_query(action, db, table):
     return {
         "privs": (
@@ -269,7 +289,6 @@ def build_local_query(action, db, table):
         ),
         "dump_table": f"SELECT * FROM {db}.dbo.{table}" if db and table else None,
     }.get(action)
-
 
 def print_table(headers, rows):
     if not headers or not rows:

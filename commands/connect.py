@@ -4,7 +4,7 @@ import shutil
 import argparse
 from core.colors import red, green, yellow, blue
 from core.helpers import run_command, select_from_list
-
+import pexpect
 def handle_connect(args, session_mgr):
     if not args:
         print_usage()
@@ -172,10 +172,36 @@ def connect_mssql(session):
         print(red("[-] Missing password for MSSQL connection."))
         return
 
-    domain_prefix = f"{session.domain}/" if session.domain else ""
-    cmd = f"impacket-mssqlclient {domain_prefix}{session.username}:{session.password}@{session.target_ip} -windows-auth"
-    print(blue(f"[*] Launching: {cmd}"))
-    os.system(cmd)
+    full_user = f"{session.domain}/{session.username}" if session.domain else session.username
+    base_cmd = f"impacket-mssqlclient {full_user}:{session.password}@{session.dc_ip} -windows-auth -command"
+
+    def clean(text):
+        lines = text.strip().splitlines()
+        output = []
+        for line in lines:
+            line = line.strip()
+            if any(line.startswith(s) for s in ["[*]", "[-]", "Impacket"]) or line.lower().startswith("sql>"):
+                continue
+            if line:
+                output.append(line)
+        return output
+
+    def exec_sql():
+        os.system(base_cmd)
+
+    def fallback_sql():
+        fallback_cmd = f"impacket-mssqlclient {session.username}:{session.password}@{session.dc_ip}"
+        os.system(fallback_cmd)
+
+    print(blue(f"[*] Launching: {base_cmd}"))
+    out, err = run_command(base_cmd)
+
+    if "Login failed for user" in err or "Login failed" in out or "Guest" in out:
+        print(yellow("[!] Login failed or downgraded to Guest. Falling back to SQL Auth..."))
+        print(blue(f"[*] Launching: impacket-mssqlclient {session.username}:{session.password}@{session.dc_ip}"))
+        fallback_sql()
+    else:
+        os.system(base_cmd)
 
 
 def print_usage():

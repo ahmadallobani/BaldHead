@@ -6,6 +6,7 @@ import subprocess
 import glob
 from core.colors import red, green, yellow, blue
 import json
+
 def get_auth_args(session):
     """Return formatted auth string for net rpc / nxc / fallback tools."""
     if session.hash:
