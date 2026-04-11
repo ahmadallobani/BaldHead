@@ -126,10 +126,25 @@ class SessionManager:
         try:
             data = {}
             for name, session in self.sessions.items():
-                exportable = vars(session).copy()
-                # Remove internal or duplicate keys not supported by __init__
-                for key in ["password", "target_ip"]:
-                    exportable.pop(key, None)
+                exportable = {
+                    "name": session.name,
+                    "username": session.username,
+                    "secret": session.secret,
+                    "domain": session.domain,
+                    "target_ips": session.target_ips,
+                    "dc_ip": session.dc_ip,
+                    "hash": session.hash,
+                    "ccache": session.ccache,
+                    "kerberos": session.kerberos,
+                    "dc_hostname": session.dc_hostname,
+                    "notes": session.notes,
+                    "tags": session.tags,
+                    "env": session.env,
+                    "adcs_metadata": session.adcs_metadata,
+                    "created_at": session.created_at,
+                    "last_used": session.last_used,
+                    "_schema_version": 2,
+                }
                 data[name] = exportable
             with open(filepath, "w") as f:
                 json.dump(data, f, indent=2)
@@ -137,17 +152,25 @@ class SessionManager:
         except Exception as e:
             print(red(f"[-] Failed to export sessions: {e}"))
 
-
-
     def import_sessions(self, filepath="sessions.json"):
         try:
             with open(filepath, "r") as f:
                 data = json.load(f)
             for name, session_data in data.items():
-                s = Session(**session_data)
+                # Drop internal schema version key before constructing Session
+                sd = {k: v for k, v in session_data.items() if not k.startswith("_")}
+                # Build with known __init__ params; remaining attrs set via __dict__
+                init_keys = {"name", "username", "secret", "domain", "target_ips",
+                             "dc_ip", "hash", "ccache", "kerberos", "dc_hostname",
+                             "notes", "tags", "env", "adcs_metadata", "created_at", "last_used"}
+                init_args = {k: v for k, v in sd.items() if k in init_keys}
+                s = Session(**init_args)
+                # Restore any extra attrs not in __init__
+                for k, v in sd.items():
+                    if k not in init_keys:
+                        setattr(s, k, v)
                 self.sessions[name] = s
-                env = getattr(s, "env", "default")
-                self.environments[env].append(name)
+                self.environments[s.env].append(name)
             print(green(f"[+] Imported {len(data)} sessions from {filepath}"))
         except Exception as e:
             print(red(f"[-] Failed to import sessions: {e}"))

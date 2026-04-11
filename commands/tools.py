@@ -3,6 +3,8 @@ import os
 import subprocess
 import shutil
 import re
+import glob
+from datetime import datetime
 from core.colors import red, green, yellow, blue
 from core.helpers import save_loot
 
@@ -32,6 +34,12 @@ def handle_tools(args, session_mgr):
         grep_users(args[1:])
     elif cmd == "removeloot":
         remove_loot(args[1:])
+    elif cmd == "report":
+        generate_report(session_mgr)
+    elif cmd == "creds":
+        show_creds()
+    elif cmd == "log":
+        show_log(args[1:])
     else:
         print(red(f"[-] Unknown tools subcommand: {cmd}"))
         run_interactive()
@@ -197,6 +205,107 @@ def remove_loot(args):
         else:
             print(red(f"[-] File not found: {args[0]}"))
 
+def generate_report(session_mgr):
+    print(blue("[*] Generating pentest report..."))
+    try:
+        os.makedirs(LOOT_DIR, exist_ok=True)
+        lines = []
+        lines.append("# BaldHead Pentest Report")
+        lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+
+        lines.append("## Sessions")
+        sessions = session_mgr.list(raw=True)
+        if sessions:
+            for s in sessions:
+                marker = " (active)" if s == session_mgr.get_current() else ""
+                lines.append(f"- **{s.name}**: `{s.username}@{s.domain}` [{s.target_ip}] env={s.env}{marker}")
+        else:
+            lines.append("_No sessions recorded._")
+
+        lines.append("\n## Loot Files")
+        loot_files = sorted(glob.glob(os.path.join(LOOT_DIR, "*")))
+        if loot_files:
+            for f in loot_files:
+                if os.path.isfile(f):
+                    size = os.path.getsize(f)
+                    lines.append(f"- `{os.path.basename(f)}` ({size} bytes)")
+        else:
+            lines.append("_No loot files found._")
+
+        lines.append("\n## Credential Hashes")
+        hashes = _collect_hashes()
+        if hashes:
+            lines.append(f"Found **{len(hashes)}** unique credential entries:")
+            lines.append("```")
+            for h in sorted(hashes)[:50]:
+                lines.append(h)
+            if len(hashes) > 50:
+                lines.append(f"... and {len(hashes) - 50} more (see loot/parsed_*)")
+            lines.append("```")
+        else:
+            lines.append("_No credential hashes found._")
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        report_path = os.path.join(LOOT_DIR, f"report_{ts}.md")
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        print(green(f"[+] Report saved to: {report_path}"))
+    except Exception as e:
+        print(red(f"[!] Report generation failed: {e}"))
+
+
+def _collect_hashes():
+    hashes = set()
+    if not os.path.exists(LOOT_DIR):
+        return hashes
+    for fpath in glob.glob(os.path.join(LOOT_DIR, "*.txt")) + glob.glob(os.path.join(LOOT_DIR, "*.hash")):
+        try:
+            with open(fpath, errors="ignore") as f:
+                for line in f:
+                    if re.search(r"[a-fA-F0-9]{32}", line):
+                        hashes.add(line.strip())
+        except Exception:
+            continue
+    return hashes
+
+
+def show_creds():
+    print(blue("[*] Credential summary from loot..."))
+    hashes = _collect_hashes()
+    if hashes:
+        print(green(f"[+] Found {len(hashes)} unique credential entries:"))
+        for h in sorted(hashes):
+            print(f"  {h}")
+    else:
+        print(yellow("[*] No credential hashes found in loot."))
+
+
+def show_log(args):
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        print(yellow("[*] No logs directory found."))
+        return
+    if args and args[0] == "clear":
+        confirm = input(yellow("[?] Delete all audit logs? (y/N): ")).strip().lower()
+        if confirm == "y":
+            for f in glob.glob(os.path.join(log_dir, "audit_*.log")):
+                os.remove(f)
+            print(green("[+] Audit logs cleared."))
+        return
+    log_files = sorted(glob.glob(os.path.join(log_dir, "audit_*.log")), reverse=True)
+    if not log_files:
+        print(yellow("[*] No audit log files found."))
+        return
+    latest = log_files[0]
+    print(blue(f"[*] Showing: {latest}\n"))
+    try:
+        with open(latest, encoding="utf-8") as f:
+            for line in f:
+                print(line.rstrip())
+    except Exception as e:
+        print(red(f"[!] Could not read log: {e}"))
+
+
 def run_interactive():
     print(blue("\n[*] Tools Menu:"))
     print("  1) Show loot files")
@@ -206,7 +315,9 @@ def run_interactive():
     print("  5) Open loot file")
     print("  6) Grep users")
     print("  7) Remove loot file")
-    print("  8) Exit")
+    print("  8) Generate report")
+    print("  9) Show credentials")
+    print("  0) Exit")
     choice = input("Select > ").strip()
     if choice == "1": show_loot([])
     elif choice == "2": parse_hashes()
@@ -215,4 +326,6 @@ def run_interactive():
     elif choice == "5": open_loot_file([input("Filename > ").strip()])
     elif choice == "6": grep_users([input("Search term > ").strip()])
     elif choice == "7": remove_loot([input("Filename or all > ").strip()])
+    elif choice == "8": print(yellow("[*] Pass session_mgr via 'tools report' command."))
+    elif choice == "9": show_creds()
     else: print(yellow("[*] Exiting tools menu."))

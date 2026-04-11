@@ -6,6 +6,12 @@ from core.colors import red, green, yellow, blue
 from modules import auth_enum, bloodhound_enum, enum_mssql
 # Anonymous enum
 from modules import anon_enum
+# New enum modules
+from modules.enum import gpo as enum_gpo_mod
+from modules.enum import laps as enum_laps_mod
+from modules.enum import acl as enum_acl_mod
+from modules.enum import descriptions as enum_desc_mod
+from modules.enum import unconstrained as enum_uncon_mod
 
 ENUM_MODULES = {
     "users": auth_enum.enum_users,
@@ -24,6 +30,11 @@ ENUM_MODULES = {
     "shares": auth_enum.enum_shares,
     "deletedusers": auth_enum.enum_deleted_users,
     "bloodhound": bloodhound_enum.run_bloodhound,
+    "gpo": enum_gpo_mod.enum_gpo,
+    "laps": enum_laps_mod.enum_laps,
+    "acl": enum_acl_mod.enum_acl,
+    "descriptions": enum_desc_mod.enum_descriptions,
+    "unconstrained": enum_uncon_mod.enum_unconstrained,
     # DO NOT PUT "mssql" HERE – it's handled separately!
 }
 
@@ -55,10 +66,14 @@ def handle_enum(args, session_mgr):
             enum_mssql.enum_mssql(session_mgr.get_current(), action=action, db=db, table=table, save=save_flag)
 
         elif cmd in ENUM_MODULES:
+            session = session_mgr.get_current()
             if cmd == "bloodhound":
-                ENUM_MODULES[cmd](session_mgr.get_current())
+                ENUM_MODULES[cmd](session)
+            elif cmd == "acl":
+                target = args[1] if len(args) > 1 and args[1].lower() != "save" else None
+                ENUM_MODULES[cmd](session, target=target, save="save" in args)
             else:
-                ENUM_MODULES[cmd](session_mgr.get_current(), save="save" in args)
+                ENUM_MODULES[cmd](session, save="save" in args)
 
         else:
             print(red(f"[-] Unknown enum module: {cmd}"))
@@ -129,7 +144,12 @@ def print_usage():
     print("  asrep           - AS-REP roastable users")
     print("  kerberoast      - Kerberoastable users")
     print("  shares          - SMB shares via nxc")
-    print("  deletedUsers    - Enumerate Deleted Users")
+    print("  deletedusers    - Enumerate Deleted Users")
+    print("  gpo             - Enumerate Group Policy Objects via LDAP")
+    print("  laps            - Check LAPS deployment and read passwords")
+    print("  acl [target]    - Enumerate interesting ACLs on an AD object")
+    print("  descriptions    - Scrape AD descriptions for credential strings")
+    print("  unconstrained   - Find computers with unconstrained delegation")
     print("  anon <target>   - Anonymous enum4linux + ftp/smb/nmap")
     print("  bloodhound      - Bloodhound graph")
     print("  mssql <action> [db] [table] [save] - MSSQL enumeration module")

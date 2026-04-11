@@ -9,6 +9,9 @@ from modules import (
     writespn, forcechangepw, kerberoast, asrep, bloodhound_enum, readgmsa, gettgt,
     enableuser, password_spray, forge_silver, extrasid, writedacl, convert_ticket, attack_rbcd, attack_mssql,
 )
+from modules.attack import coerce as attack_coerce_mod
+from modules.attack import pth as attack_pth_mod
+from modules.attack import ptt as attack_ptt_mod
 
 # === Modules that require a session ===
 ATTACK_MODULES = {
@@ -31,10 +34,13 @@ ATTACK_MODULES = {
     "extrasid": extrasid.run,
     "writedacl": writedacl.attack_writedacl,
     "addmember": addself.attack_addself,
-    "genericwrite": writedacl.attack_writedacl,
+    "genericwrite": genericall.attack_genericall,
     "kirbi2ccache": convert_ticket.convert_ticket,
     "rbcd": attack_rbcd.attack_rbcd,
     "mssql": attack_mssql.attack_mssql,
+    "coerce": attack_coerce_mod.attack_coerce,
+    "pth": attack_pth_mod.attack_pth,
+    "ptt": attack_ptt_mod.attack_ptt,
 }
 
 # === Aliases for convenience ===
@@ -119,6 +125,8 @@ def run_attack(args, session, session_mgr):
                 lhost = input("[?] Enter LHOST for reverse shell: ").strip()
                 lport = input("[?] Enter LPORT for reverse shell: ").strip()
             ATTACK_MODULES[cmd](session, action=action, command=command, target=target, lhost=lhost, lport=lport)
+        elif cmd in {"coerce", "pth", "ptt"}:
+            ATTACK_MODULES[cmd](session, *args[1:])
         else:
             ATTACK_MODULES[cmd](session)
 

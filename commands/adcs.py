@@ -5,6 +5,7 @@ import traceback
 # === Import ADCS modules ===
 from modules.adcs import enum as adcs_enum
 from modules.adcs import esc1, esc2, esc3, esc9, esc4, pfx2hash, esc6, esc5, Forge_CA_key, esc15
+from modules.adcs import esc7, esc8
 
 def handle_adcs(args, session_mgr):
     if not args:
@@ -33,6 +34,10 @@ def handle_adcs(args, session_mgr):
             esc5.abuse_esc5(session)
         elif cmd == "esc6":
             _use_template(session, esc6.abuse_esc6, "ESC6")
+        elif cmd == "esc7":
+            esc7.abuse_esc7(session)
+        elif cmd == "esc8":
+            esc8.abuse_esc8(session)
         elif cmd == "esc9":
             _use_template(session, esc9.abuse_esc9, "ESC9")
         elif cmd == "esc15":
@@ -43,7 +48,7 @@ def handle_adcs(args, session_mgr):
             pfx2hash.abuse_pfx2hash(session)
         elif cmd == "show":
             show_adcs_metadata(session)
-        elif cmd in [f"esc{x}" for x in [7, 10, 11, 12, 13, 14, 17, 18]]:
+        elif cmd in [f"esc{x}" for x in [10, 11, 12, 13, 14, 16, 17, 18]]:
             print(yellow(f"[*] {cmd.upper()} is not yet implemented. Coming soon..."))
         else:
             print(red(f"[-] Unknown ADCS subcommand: {cmd}"))

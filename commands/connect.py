@@ -5,6 +5,8 @@ import argparse
 from core.colors import red, green, yellow, blue
 from core.helpers import run_command, select_from_list
 import pexpect
+
+
 def handle_connect(args, session_mgr):
     if not args:
         print_usage()
@@ -19,6 +21,7 @@ def handle_connect(args, session_mgr):
 
     run_connect(cmd, session)
 
+
 def run_connect(cmd, session):
     if cmd == "smb":
         connect_smb(session)
@@ -32,31 +35,44 @@ def run_connect(cmd, session):
         connect_ftp(session)
     elif cmd == "mssql":
         connect_mssql(session)
+    elif cmd == "wmi":
+        connect_wmi(session)
+    elif cmd == "dcom":
+        connect_dcom(session)
+    elif cmd == "smbexec":
+        connect_smbexec(session)
+    elif cmd == "atexec":
+        connect_atexec(session)
     else:
         print(red(f"[-] Unknown connect method: {cmd}"))
         print_usage()
 
+
 def connect_smb(session):
-    if not shutil.which("smbclient"):
-        print(red("[-] 'smbclient' not found in PATH. Please install smbclient (samba-client)."))
+    if not shutil.which("smbclient") and not shutil.which("impacket-smbclient"):
+        print(red("[-] Neither smbclient nor impacket-smbclient found in PATH."))
         return
 
-    # === Build base connection info ===
     ip = session.target_ip
     user = session.username
     domain = session.domain
 
+    # Build listing command — support hash via impacket-smbclient
     if session.hash:
-        print(red("[-] SMB connection via hash not supported with native smbclient. Use password or Kerberos."))
+        if not shutil.which("impacket-smbclient"):
+            print(red("[-] impacket-smbclient not found. Cannot use hash-based SMB."))
+            return
+        list_cmd = (
+            f"impacket-smbclient {domain}/{user}@{ip} "
+            f"-hashes :{session.hash} -no-pass -list /"
+        )
+    elif session.password:
+        list_cmd = f"smbclient -L \\\\{ip} -U {user}%{session.password}"
+    else:
+        print(red("[-] No credentials in session for SMB."))
         return
 
-    if not session.password:
-        print(red("[-] No password provided for smbclient."))
-        return
-
-    # === List shares
     print(blue(f"[*] Listing available shares on {ip}..."))
-    list_cmd = f"smbclient -L \\\\{ip} -U {user}%{session.password}"
     out, err = run_command(list_cmd)
     combined = out + "\n" + err
 
@@ -66,7 +82,7 @@ def connect_smb(session):
     elif "Anonymous login successful" in combined:
         print(yellow("[!] Warning: logged in anonymously."))
 
-    # === Extract shares
+    # Extract shares
     shares = []
     for line in combined.splitlines():
         if "Disk" in line and "\\" not in line:
@@ -79,7 +95,6 @@ def connect_smb(session):
         print(yellow(combined.strip()))
         return
 
-    # === Prompt user to select
     shares.append("exit")
     share = select_from_list(shares, "[*] Select share to open (or type 'exit'):")
 
@@ -87,9 +102,14 @@ def connect_smb(session):
         print(yellow("[*] Exiting SMB connect menu."))
         return
 
+    if session.hash:
+        connect_cmd = (
+            f"impacket-smbclient {domain}/{user}@{ip} "
+            f"-hashes :{session.hash} -no-pass"
+        )
+    else:
+        connect_cmd = f"smbclient \\\\\\\\{ip}\\\\{share} -U {user}%{session.password}"
 
-    # === Launch interactive session
-    connect_cmd = f"smbclient \\\\\\\\{ip}\\\\{share} -U {user}%{session.password}"
     print(blue(f"[*] Connecting to share: {share}"))
     print(yellow("[*] Type 'exit' to leave SMB shell.\n"))
     os.system(connect_cmd)
@@ -97,28 +117,28 @@ def connect_smb(session):
 
 def connect_winrm(session):
     cmd = f"evil-winrm -i {session.target_ip} -u {session.username}"
-    if session.password:
+    if session.hash:
+        cmd += f" -H {session.hash}"
+    elif session.password:
         cmd += f" -p '{session.password}'"
-    elif session.hash:
-        print(red("[-] WinRM does not support NTLM hash auth in this client. Use password."))
-        return
     else:
-        print(red("[-] Missing password for WinRM connection."))
+        print(red("[-] Missing credentials for WinRM connection."))
         return
     os.system(cmd)
 
+
 def connect_rdp(session):
- 
     if session.password:
         cmd = f"xfreerdp3 /u:{session.username} /p:{session.password} /v:{session.target_ip} +dynamic-resolution /clipboard:direction-to:all,files-to:all"
     elif session.hash:
         cmd = f"xfreerdp3 /v:{session.target_ip} /u:{session.username} /pth:{session.hash} +dynamic-resolution /clipboard:direction-to:all,files-to:all"
     else:
-        print(red("[-] RDP requires a plaintext password."))
+        print(red("[-] RDP requires a password or hash (PtH)."))
         return
 
     print(blue(f"[*] Launching: {cmd}"))
     os.system(cmd)
+
 
 def connect_psexec(session):
     if not shutil.which("impacket-psexec"):
@@ -129,6 +149,9 @@ def connect_psexec(session):
         cmd = f"impacket-psexec {session.domain}/{session.username}@{session.target_ip} -hashes :{session.hash}"
     elif session.password:
         cmd = f"impacket-psexec {session.domain}/{session.username}:{session.password}@{session.target_ip}"
+    else:
+        print(red("[-] No credentials for psexec."))
+        return
 
     print(blue(f"[*] Launching: {cmd}"))
     os.system(cmd)
@@ -137,14 +160,12 @@ def connect_psexec(session):
 def connect_ftp(session):
     print(blue(f"[*] Trying FTP on {session.target_ip}..."))
 
-    # Try anonymous first
     anon_cmd = f"echo open {session.target_ip} 21\\nuser anonymous\\nquit | ftp -n"
     out, err = run_command(anon_cmd)
     if "230" in (out + err):
         print(green("[+] FTP allows anonymous login."))
         return
 
-    # Try user credentials
     if session.password:
         cmd = f"echo open {session.target_ip} 21\\nuser {session.username} {session.password}\\nquit | ftp -n"
         out, err = run_command(cmd)
@@ -154,6 +175,7 @@ def connect_ftp(session):
             print(red("[-] FTP access denied with provided credentials."))
     else:
         print(yellow("[*] No password to try FTP authentication."))
+
 
 def connect_mssql(session):
     if not shutil.which("impacket-mssqlclient"):
@@ -187,9 +209,9 @@ def connect_mssql(session):
         index = child.expect([
             "Login failed for user",
             "user '.*?Guest'",
-            "SQL .*?master\\)>",
+            r"SQL .*?master\)>",
             pexpect.EOF,
-            pexpect.TIMEOUT
+            pexpect.TIMEOUT,
         ])
 
         if index in [0, 1]:
@@ -205,11 +227,88 @@ def connect_mssql(session):
         print(red(f"[-] Error launching MSSQL client: {e}"))
 
 
+def connect_wmi(session):
+    if not shutil.which("impacket-wmiexec"):
+        print(red("[-] impacket-wmiexec not found in PATH."))
+        return
+
+    if session.hash:
+        cmd = f"impacket-wmiexec {session.domain}/{session.username}@{session.target_ip} -hashes :{session.hash}"
+    elif session.password:
+        cmd = f"impacket-wmiexec {session.domain}/{session.username}:{session.password}@{session.target_ip}"
+    else:
+        print(red("[-] No credentials for WMI exec."))
+        return
+
+    print(blue(f"[*] Launching WMI exec: {cmd}"))
+    os.system(cmd)
+
+
+def connect_dcom(session):
+    if not shutil.which("impacket-dcomexec"):
+        print(red("[-] impacket-dcomexec not found in PATH."))
+        return
+
+    if session.hash:
+        cmd = f"impacket-dcomexec {session.domain}/{session.username}@{session.target_ip} -hashes :{session.hash} -object MMC20"
+    elif session.password:
+        cmd = f"impacket-dcomexec {session.domain}/{session.username}:{session.password}@{session.target_ip} -object MMC20"
+    else:
+        print(red("[-] No credentials for DCOM exec."))
+        return
+
+    print(blue(f"[*] Launching DCOM exec: {cmd}"))
+    os.system(cmd)
+
+
+def connect_smbexec(session):
+    if not shutil.which("impacket-smbexec"):
+        print(red("[-] impacket-smbexec not found in PATH."))
+        return
+
+    if session.hash:
+        cmd = f"impacket-smbexec {session.domain}/{session.username}@{session.target_ip} -hashes :{session.hash}"
+    elif session.password:
+        cmd = f"impacket-smbexec {session.domain}/{session.username}:{session.password}@{session.target_ip}"
+    else:
+        print(red("[-] No credentials for smbexec."))
+        return
+
+    print(blue(f"[*] Launching: {cmd}"))
+    os.system(cmd)
+
+
+def connect_atexec(session):
+    if not shutil.which("impacket-atexec"):
+        print(red("[-] impacket-atexec not found in PATH."))
+        return
+
+    command = input("[?] Command to execute remotely: ").strip()
+    if not command:
+        print(red("[-] No command specified."))
+        return
+
+    if session.hash:
+        cmd = f"impacket-atexec {session.domain}/{session.username}@{session.target_ip} -hashes :{session.hash} '{command}'"
+    elif session.password:
+        cmd = f"impacket-atexec {session.domain}/{session.username}:{session.password}@{session.target_ip} '{command}'"
+    else:
+        print(red("[-] No credentials for atexec."))
+        return
+
+    print(blue(f"[*] Launching: {cmd}"))
+    os.system(cmd)
+
+
 def print_usage():
     print(blue("Usage:"))
-    print("  connect smb       - Open SMB shell (impacket-smbclient)")
-    print("  connect winrm     - Launch Evil-WinRM shell")
-    print("  connect rdp       - Launch RDP client (xfreerdp)")
+    print("  connect smb       - Open SMB shell (supports hash via impacket-smbclient)")
+    print("  connect winrm     - Launch Evil-WinRM shell (supports hash)")
+    print("  connect rdp       - Launch RDP client (xfreerdp, supports PtH)")
     print("  connect psexec    - Run remote shell via impacket-psexec")
     print("  connect ftp       - Try FTP login (anonymous or user)")
     print("  connect mssql     - Connect to MSSQL via impacket-mssqlclient")
+    print("  connect wmi       - WMI exec via impacket-wmiexec")
+    print("  connect dcom      - DCOM/MMC exec via impacket-dcomexec")
+    print("  connect smbexec   - SMB exec via impacket-smbexec")
+    print("  connect atexec    - AT exec via impacket-atexec")

@@ -51,6 +51,13 @@ class BaldHead(cmd.Cmd):
 
     def postcmd(self, stop, line):
         self._update_prompt()
+        if line and line.strip():
+            try:
+                from core.logger import log
+                s = self.session_mgr.get_current()
+                log(line.strip(), session_name=s.name if s else None)
+            except Exception:
+                pass
         return stop
 
     def _update_prompt(self):
@@ -115,6 +122,43 @@ class BaldHead(cmd.Cmd):
                 print(HELP_TEXT["general"])
 
 
+    # ---------- TAB COMPLETION ----------
+    def complete_attack(self, text, line, begidx, endidx):
+        from commands.attack import ATTACK_MODULES, ATTACK_ALIASES
+        options = list(ATTACK_MODULES.keys()) + list(ATTACK_ALIASES.keys()) + ["all"]
+        return [o for o in options if o.startswith(text)]
+
+    def complete_enum(self, text, line, begidx, endidx):
+        from commands.enum import ENUM_MODULES
+        options = list(ENUM_MODULES.keys()) + ["anon", "mssql", "all"]
+        return [o for o in options if o.startswith(text)]
+
+    def complete_adcs(self, text, line, begidx, endidx):
+        options = [
+            "enum", "esc1", "esc2", "esc3", "esc4", "esc5", "esc6", "esc7",
+            "esc8", "esc9", "esc10", "esc11", "esc13", "esc15", "esc16",
+            "pfx2hash", "forge", "show",
+        ]
+        return [o for o in options if o.startswith(text)]
+
+    def complete_connect(self, text, line, begidx, endidx):
+        options = ["smb", "winrm", "rdp", "psexec", "ftp", "mssql", "wmi", "dcom", "atexec", "smbexec", "ssh"]
+        return [o for o in options if o.startswith(text)]
+
+    def complete_session(self, text, line, begidx, endidx):
+        subcommands = ["add", "use", "list", "export", "import", "clear", "del", "note", "tag", "test", "clone"]
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] in ["use", "del", "note", "tag", "clone"]:
+            return [n for n in self.session_mgr.sessions.keys() if n.startswith(text)]
+        return [o for o in subcommands if o.startswith(text)]
+
+    # Aliases share completion
+    complete_a = complete_attack
+    complete_e = complete_enum
+    complete_ad = complete_adcs
+    complete_c = complete_connect
+    complete_s = complete_session
+
     def do_exit(self, _):
         print("Bye!")
         return True
@@ -123,6 +167,7 @@ class BaldHead(cmd.Cmd):
         import os
         os.system("clear" if os.name != "nt" else "cls")
 
+    do_quit = do_exit
     do_s = do_session
     do_a = do_attack
     do_c = do_connect
@@ -136,5 +181,6 @@ class BaldHead(cmd.Cmd):
 
 
 if __name__ == "__main__":
-    BaldHead().startup_banner()
-    BaldHead().cmdloop()
+    bh = BaldHead()
+    bh.startup_banner()
+    bh.cmdloop()
